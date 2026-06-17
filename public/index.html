@@ -1248,11 +1248,17 @@ function applyEvent(e){
 }
 function renderKillfeed(){const host=$("killfeed");if(!host)return;const now=performance.now();killfeed=killfeed.filter(k=>k.until>now);
   host.innerHTML=killfeed.map(k=>'<div class="kf '+k.cls+'">'+k.text+'</div>').join("");}
+let _authCache=null; // {wallet,ts,sig} — reuse a fresh signature so you don't sign a wallet popup on every join
 async function signLogin(){
   if(!walletAddr||!activeSigner)return null;
+  // server accepts a login signature for 5 min (auth.js MAX_AGE_MS); reuse ours within a safe margin
+  if(_authCache&&_authCache.wallet===walletAddr&&Date.now()-_authCache.ts<4*60*1000)
+    return {ts:_authCache.ts,sig:_authCache.sig};
   try{const ts=Date.now();const msg="KABOOMIES login\nwallet: "+walletAddr+"\nts: "+ts;
     const sigBytes=await activeSigner(new TextEncoder().encode(msg));
-    return {ts,sig:Array.from(sigBytes)};}catch(e){return null;}
+    const sig=Array.from(sigBytes);
+    _authCache={wallet:walletAddr,ts,sig};
+    return {ts,sig};}catch(e){return null;}
 }
 function sendEmote(e){
   if(connected&&ws&&ws.readyState===1){ws.send(JSON.stringify({t:"emote",e}));}
