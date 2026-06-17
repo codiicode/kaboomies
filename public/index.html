@@ -2,8 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 <title>KABOOMIES — kaboomies.fun</title>
+<meta name="theme-color" content="#141414" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="KABOOMIES" />
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13,7 +18,7 @@
   :root{--ink:#141414;--paper:#fff;--red:#ff3b30;--grey:#7a7a7a;--line:#141414;
     --display:'Press Start 2P',ui-monospace,monospace;--body:'VT323',ui-monospace,monospace;}
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-  html,body{height:100%}
+  html,body{height:100%;overscroll-behavior:none;}
   img{image-rendering:pixelated;image-rendering:crisp-edges}
   button{font-family:inherit;cursor:pointer;border:none}
   body{font-family:var(--body);font-size:20px;line-height:1.15;color:var(--ink);user-select:none;overflow-x:hidden;min-height:100%;
@@ -100,8 +105,8 @@
   .wbtn{font-family:var(--display);font-size:10px;color:#fff;background:var(--red);border:3px solid var(--ink);box-shadow:3px 3px 0 var(--ink);padding:9px 11px 7px;}
   .wbtn:active{transform:translate(3px,3px);box-shadow:none;}
   .wbtn.ghost{background:#fff;color:var(--ink);}
-  #topbar{position:fixed;top:7px;left:7px;right:7px;z-index:55;display:flex;align-items:center;justify-content:space-between;gap:12px;
-    background:#fff;border:3px solid var(--ink);box-shadow:4px 4px 0 var(--ink);padding:8px 16px;pointer-events:none}
+  #topbar{position:fixed;top:calc(7px + env(safe-area-inset-top));left:calc(7px + env(safe-area-inset-left));right:calc(7px + env(safe-area-inset-right));z-index:55;display:flex;align-items:center;justify-content:space-between;gap:12px;
+    background:#fff;border:3px solid var(--ink);box-shadow:4px 4px 0 var(--ink);padding:8px 16px;padding-right:calc(112px + env(safe-area-inset-right));pointer-events:none}
   #topbar>*{flex:0 1 auto;min-width:0}
   #topbar>#bal-hud{flex:0 0 auto}
   #bal-hud{z-index:55;pointer-events:none;font-family:var(--body);font-size:20px;text-transform:uppercase;letter-spacing:.03em;color:var(--ink);white-space:nowrap}
@@ -143,9 +148,9 @@
   #emote-bar{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:57;display:flex;gap:6px;}
   #emote-bar button{font-size:18px;line-height:1;width:40px;height:40px;background:#fff;border:3px solid var(--ink);box-shadow:3px 3px 0 var(--ink);cursor:pointer;}
   #emote-bar button:active{transform:translate(3px,3px);box-shadow:none;}
-  #sound-btn{position:fixed;top:16px;right:16px;z-index:58;font-size:16px;width:42px;height:42px;background:#fff;border:3px solid var(--ink);box-shadow:3px 3px 0 var(--ink);cursor:pointer;}
+  #sound-btn{position:fixed;top:calc(16px + env(safe-area-inset-top));right:calc(16px + env(safe-area-inset-right));z-index:58;font-size:16px;width:42px;height:42px;background:#fff;border:3px solid var(--ink);box-shadow:3px 3px 0 var(--ink);cursor:pointer;}
   #sound-btn:active{transform:translate(3px,3px);box-shadow:none;}
-  #mic-btn{position:fixed;top:16px;right:66px;z-index:58;font-size:16px;width:42px;height:42px;background:#fff;border:3px solid var(--ink);box-shadow:3px 3px 0 var(--ink);cursor:pointer;display:none;}
+  #mic-btn{position:fixed;top:calc(16px + env(safe-area-inset-top));right:calc(66px + env(safe-area-inset-right));z-index:58;font-size:16px;width:42px;height:42px;background:#fff;border:3px solid var(--ink);box-shadow:3px 3px 0 var(--ink);cursor:pointer;display:none;}
   #mic-btn:active{transform:translate(3px,3px);box-shadow:none;}
   #mic-btn.on{background:#43d17f;}
   #mic-btn.live{background:#ff3b30;animation:micpulse 1s infinite;}
@@ -175,14 +180,24 @@
   #banner .bx{background:#fff;border:5px solid var(--ink);box-shadow:10px 10px 0 var(--red);padding:26px 42px;font-family:var(--display);font-size:clamp(15px,4vw,26px);text-align:center;line-height:1.4}
   #banner small{display:block;font-family:var(--body);font-size:20px;color:var(--grey);text-transform:uppercase;margin-top:12px}
   #touch{position:fixed;inset:0;z-index:54;display:none;pointer-events:none}
-  #dpad{position:absolute;left:18px;bottom:20px;width:168px;height:168px;pointer-events:auto;touch-action:none}
-  #dpad .k{position:absolute;width:54px;height:54px;background:#fff;border:3px solid var(--ink);box-shadow:3px 3px 0 var(--ink);display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--ink)}
+  #dpad{position:absolute;left:calc(18px + env(safe-area-inset-left));bottom:calc(20px + env(safe-area-inset-bottom));width:168px;height:168px;pointer-events:auto;touch-action:none}
+  #dpad .k{position:absolute;width:54px;height:54px;background:rgba(255,255,255,.82);border:3px solid var(--ink);box-shadow:3px 3px 0 rgba(20,20,20,.55);display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--ink)}
   #dpad .k.act{background:var(--ink);color:#fff;box-shadow:none;transform:translate(3px,3px)}
   #dpad .up{left:57px;top:0}#dpad .dn{left:57px;bottom:0}#dpad .lf{left:0;top:57px}#dpad .rt{right:0;top:57px}
-  #fire{position:absolute;right:24px;bottom:34px;width:96px;height:96px;pointer-events:auto;background:var(--ink);color:#fff;border:4px solid var(--ink);box-shadow:5px 5px 0 var(--red);font-family:var(--display);font-size:12px;display:flex;align-items:center;justify-content:center;touch-action:none}
+  #fire{position:absolute;right:calc(24px + env(safe-area-inset-right));bottom:calc(34px + env(safe-area-inset-bottom));width:96px;height:96px;pointer-events:auto;background:rgba(20,20,20,.88);color:#fff;border:4px solid var(--ink);box-shadow:5px 5px 0 var(--red);font-family:var(--display);font-size:12px;display:flex;align-items:center;justify-content:center;touch-action:none}
   #fire:active{transform:translate(5px,5px);box-shadow:none}
   @media (hover:none) and (pointer:coarse){#touch.on{display:block}}
-  @media (prefers-reduced-motion:reduce){.bgb,.kab canvas,.logo-mark img,.fuse-spark,.play-sub{animation:none!important}}
+  /* phones: hand more of the screen to the board */
+  @media (hover:none) and (pointer:coarse){#screen-game.active{padding-top:calc(60px + env(safe-area-inset-top))}}
+  /* portrait phones: the arenas are wide, so ask the player to rotate to landscape */
+  #rotate-lock{position:fixed;inset:0;z-index:70;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;text-align:center;padding:32px;
+    background:#fff;background-image:linear-gradient(#ededed 1px,transparent 1px),linear-gradient(90deg,#ededed 1px,transparent 1px);background-size:26px 26px;}
+  #rotate-lock .ph{font-size:64px;line-height:1;animation:rotateNudge 1.8s ease-in-out infinite;transform-origin:50% 50%}
+  #rotate-lock .rt-title{font-family:var(--display);font-size:15px;color:var(--ink);line-height:1.5}
+  #rotate-lock .rt-sub{font-family:var(--body);font-size:19px;text-transform:uppercase;color:var(--grey)}
+  @keyframes rotateNudge{0%,55%{transform:rotate(0)}80%,100%{transform:rotate(-90deg)}}
+  @media (hover:none) and (pointer:coarse) and (orientation:portrait){#screen-game.active #rotate-lock{display:flex}}
+  @media (prefers-reduced-motion:reduce){.bgb,.kab canvas,.logo-mark img,.fuse-spark,.play-sub,#rotate-lock .ph{animation:none!important}}
 </style>
 </head>
 <body>
@@ -287,6 +302,11 @@
         <div class="k lf" data-d="l">◀</div><div class="k rt" data-d="r">▶</div>
       </div>
       <div id="fire">BOMB</div>
+    </div>
+    <div id="rotate-lock">
+      <div class="ph">📱</div>
+      <div class="rt-title">ROTATE TO PLAY</div>
+      <div class="rt-sub">Turn your phone sideways<br>for the full arena</div>
     </div>
   </section>
 
@@ -1505,8 +1525,10 @@ window.addEventListener("keyup",e=>{const k=e.key.toLowerCase();
   $("fire").addEventListener("touchstart",e=>{e.preventDefault();bomb();},{passive:false});})();
 
 /* ---------- layout ---------- */
-function fitCanvas(){const TOPB=96;const availW=window.innerWidth,availH=window.innerHeight-TOPB;let s=availW/W;if(H*s>availH+TILE*1.1)s=(availH+TILE*1.1)/H;CV.style.width=(W*s)+"px";CV.style.height=(H*s)+"px";}
+const _coarse=matchMedia("(hover:none) and (pointer:coarse)").matches;
+function fitCanvas(){const TOPB=_coarse?60:96;const availW=window.innerWidth,availH=window.innerHeight-TOPB;let s=availW/W;if(H*s>availH+TILE*1.1)s=(availH+TILE*1.1)/H;CV.style.width=(W*s)+"px";CV.style.height=(H*s)+"px";}
 window.addEventListener("resize",()=>{if(currentScreen==="game")fitCanvas();});
+window.addEventListener("orientationchange",()=>{if(currentScreen==="game")setTimeout(fitCanvas,250);});
 
 /* ---------- HUD ---------- */
 function setStatus(t){$("status").textContent=t;}
