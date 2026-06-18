@@ -274,7 +274,7 @@ function closeRing(room) {
   for (const pl of room.players.values()) {
     if (!pl.alive) continue;
     const c = Math.round((pl.x - TILE / 2) / TILE), r = Math.round((pl.y - TILE / 2) / TILE);
-    if (wset.has(c + "," + r)) { pl.alive = false; pushEvent(room, { k: "crush", who: pl.name }); killDrop(room, pl); }
+    if (wset.has(c + "," + r)) { pl.alive = false; store.bumpStat(pl.key, "deaths"); pushEvent(room, { k: "crush", who: pl.name }); killDrop(room, pl); }
   }
   room.closeRing++;
   room.sudden = true;
@@ -385,6 +385,8 @@ function movePlayer(room, pl) {
     if (room.drops[i].c === pc && room.drops[i].r === pr) {
       setBal(pl.key, bal(pl.key, room.cur) + room.drops[i].a, null, room.cur);
       gainXp(room, pl.key, XP_PICKUP);
+      store.bumpStat(pl.key, "pickups");
+      bumpQuest(room, pl, "pickups");
       room.drops.splice(i, 1);
     }
   }
@@ -424,6 +426,8 @@ function explode(room, b) {
         room.grid[r][c] = 0;
         room.destroyed.push({ c, r });
         gainXp(room, ownerKey, XP_CRATE);
+        store.bumpStat(ownerKey, "crates");
+        bumpQuest(room, [...room.players.values()].find(p => p.key === ownerKey), "crates");
         if (Math.random() < 0.30) {
           const pool = ["bomb", "fire", "speed"];
           newUps.push({ c, r, k: pool[Math.floor(Math.random() * pool.length)] });
@@ -561,8 +565,9 @@ function tick(room, dt) {
       pl.hp -= f.dmg;
       if (pl.hp > 0) { pushEvent(room, { k: "hurt", who: pl.name, dmg: f.dmg }); continue; }
       pl.hp = 0; pl.alive = false;
+      store.bumpStat(pl.key, "deaths");
       const by = !killer ? "a bomb" : (killer.id === pl.id ? null : killer.name);
-      if (killer && killer.id !== pl.id && killer.alive) { killer.streak = (killer.streak || 0) + 1; gainXp(room, killer.key, XP_KILL); }
+      if (killer && killer.id !== pl.id && killer.alive) { killer.streak = (killer.streak || 0) + 1; gainXp(room, killer.key, XP_KILL); store.bumpStat(killer.key, "kills"); bumpQuest(room, killer, "kills"); }
       pushEvent(room, { k: "kill", who: pl.name, by, self: !!killer && killer.id === pl.id });
       killDrop(room, pl);
     }
@@ -595,6 +600,7 @@ function maybeEndRound(room) {
   const alive = list.filter(p => p.alive);
   if (alive.length <= 1) {
     room.phase = "roundover";
+    for (const pp of room.players.values()) { store.bumpStat(pp.key, "games"); bumpQuest(room, pp, "games"); }
     const w = alive[0];
     if (w) {
       w.wins++;
@@ -605,6 +611,7 @@ function maybeEndRound(room) {
       if (payout > 0) setBal(w.key, bal(w.key, room.cur) + payout, w.name, room.cur);
       store.bumpWin(w.key, w.name);
       gainXp(room, w.key, XP_WIN);
+      bumpQuest(room, w, "win");
       pushEvent(room, { k: "win", who: w.name, pot: payout });
     } else {
       room.winner = "Draw";
@@ -729,11 +736,21 @@ if (require.main === module) {
         };
         addPlayer(room, player);
         if (MAPS[room.mapId].wager && room.phase === "playing") roundAnte(room); // join the current pot
+        let streakResult = null;
+        if (player.verified) {
+          const today = quests.dayIndex(Date.now());
+          const st = quests.nextStreak(store.getStreak(key), today);
+          store.setStreak(key, { count: st.count, best: st.best, day: st.day });
+          if (st.xpAwarded > 0) gainXp(room, key, st.xpAwarded);
+          streakResult = { count: st.count, xpAwarded: st.xpAwarded };
+        }
         ws.send(JSON.stringify({
           t: "init", id, map: room.mapId, mode: room.mode, COLS: room.cols, ROWS: room.rows, TILE,
           W: room.W, H: room.H, fuse: FUSE, grid: room.grid, bal: bal(key, room.cur), seed: room.seed,
           verified, pot: room.pot, drop: room.deathDrop,
           wager: !!MAPS[room.mapId].wager, ante: MAPS[room.mapId].ante || 0, rake: MAPS[room.mapId].rake || 0,
+          quests: player.verified ? buildQuests(key, quests.dayIndex(Date.now())) : null,
+          streak: streakResult,
         }));
       } else if (!player || !room) {
         return;
