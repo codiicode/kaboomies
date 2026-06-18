@@ -96,6 +96,10 @@
   .hatbtn{font-family:var(--body);font-size:18px;text-transform:uppercase;letter-spacing:.02em;padding:8px 12px 5px;background:#fff;border:3px solid var(--ink);color:var(--ink);}
   .hatbtn.sel{background:var(--ink);color:#fff;}
   .hatbtn:active{transform:translate(2px,2px);}
+  .hatbtn.locked{opacity:.5;cursor:not-allowed;}
+  .hatbtn .lockreq{display:block;font-family:var(--body);font-size:11px;color:var(--grey);text-transform:none;margin-top:3px;}
+  .hatbtn.nudge{animation:nudge .4s;}
+  @keyframes nudge{25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
   .create-go{margin-top:16px;text-align:center;}
   .wallet-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
     background:#fff;border:3px solid var(--ink);box-shadow:5px 5px 0 var(--ink);padding:11px 13px 9px;margin-bottom:20px;
@@ -1005,9 +1009,25 @@ const PAL={
 const HATS=["none","cap","beanie","crown","party"];
 const BASES=[{id:"house",name:"Chillhouse"},{id:"hero",name:"Hero"},{id:"sahur",name:"Tung Sahur"},{id:"bull",name:"The Black Bull"},{id:"wif",name:"WIF"},{id:"popcat",name:"Popcat"},{id:"alon",name:"ALON"},{id:"mitch",name:"MITCH"}];
 const IMG_BASES=[];
-let playerSkin=Store.get("bb_skin")||{base:"house",skin:"#e8b07a",clothes:"#7d8aa0",house:"#e7cfa0",roof:"#c0563b",hat:"none",hatCol:"#ff5d73"};
+let playerSkin=Store.get("bb_skin")||{base:"hero",skin:"#e8b07a",clothes:"#7d8aa0",house:"#e7cfa0",roof:"#c0563b",hat:"none",hatCol:"#ff5d73"};
 playerSkin.hat="none"; // hats removed
-if(!playerSkin.base||!BASES.some(b=>b.id===playerSkin.base))playerSkin.base="house";
+if(!playerSkin.base||!BASES.some(b=>b.id===playerSkin.base))playerSkin.base="hero";
+let charReqs=null;        // [{base,label,target,stat}] from GET /characters
+let charUnlock=null;      // Set of unlocked base ids for the current player
+let charProg={};          // base -> {prog,target,label}
+async function loadCharacters(){
+  if(!charReqs){ try{ const r=await fetch("/characters"); const j=await r.json(); charReqs=j.reqs||[]; }catch(e){ charReqs=[]; } }
+  charUnlock=new Set(["hero"]); charProg={};
+  const auth = walletAddr ? await signLogin() : null;
+  if(auth&&walletAddr){
+    try{ const r=await fetch("/profile",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({wallet:walletAddr,auth})});
+      if(r.ok){ const p=await r.json(); for(const ch of (p.characters||[])){ if(ch.unlocked)charUnlock.add(ch.base); charProg[ch.base]={prog:ch.prog,target:ch.target,label:ch.label}; } } }catch(e){}
+  } else {
+    for(const rq of charReqs) charProg[rq.base]={prog:0,target:rq.target,label:rq.label};
+  }
+  // a stored pick that's now locked falls back to hero
+  if(playerSkin.base!=="hero" && !charUnlock.has(playerSkin.base)){ playerSkin.base="hero"; Store.set("bb_skin",playerSkin); }
+}
 let selMap=Store.get("bb_map")||"brawl";
 if(!MAPS.some(m=>m.id===selMap))selMap="brawl";
 let selMode="play", realMoneyEnabled=false;
@@ -1115,8 +1135,13 @@ function buildCustomizer(){
   };
   const cg=document.createElement("div");cg.className="opt-group";cg.innerHTML="<h4>Character</h4>";
   const cb=document.createElement("div");cb.className="hatbtns";
-  BASES.forEach(bs=>{const b=document.createElement("button");b.className="hatbtn"+(playerSkin.base===bs.id?" sel":"");b.textContent=bs.name;
-    b.onclick=()=>{playerSkin.base=bs.id;Store.set("bb_skin",playerSkin);buildCustomizer();};
+  BASES.forEach(bs=>{const unlocked=!charUnlock||charUnlock.has(bs.id);
+    const b=document.createElement("button");
+    b.className="hatbtn"+(playerSkin.base===bs.id?" sel":"")+(unlocked?"":" locked");
+    const pr=charProg[bs.id];
+    b.innerHTML=(unlocked?"":"🔒 ")+esc(bs.name)+((unlocked||!pr)?"":'<span class="lockreq">'+esc(pr.label)+" ("+Math.min(pr.prog,pr.target)+"/"+pr.target+")</span>");
+    if(unlocked) b.onclick=()=>{playerSkin.base=bs.id;Store.set("bb_skin",playerSkin);buildCustomizer();};
+    else b.onclick=()=>{b.classList.add("nudge");setTimeout(()=>b.classList.remove("nudge"),400);};
     cb.appendChild(b);});
   cg.appendChild(cb);box.appendChild(cg);
   const pn=document.querySelector(".pname");if(pn){const cur=BASES.find(x=>x.id===playerSkin.base);pn.textContent=cur?cur.name.toUpperCase():"YOU";}
@@ -1140,7 +1165,7 @@ function renderPreview(){const pv=$("preview");if(!pv)return;const real=ctx;ctx=
 let currentScreen="start";
 function showScreen(name){currentScreen=name;for(const s of document.querySelectorAll(".screen"))s.classList.remove("active");$("screen-"+name).classList.add("active");
   if(name==="start")sizeFX();
-  if(name==="create"){buildCustomizer();updateWalletUI();}
+  if(name==="create"){buildCustomizer();updateWalletUI();loadCharacters().then(()=>{buildCustomizer();});}
   if(name==="lobby"){refreshLobby();}
   if(name==="game"){fitCanvas();if(matchMedia("(hover:none) and (pointer:coarse)").matches)$("touch").classList.add("on");startMusic();}
   else stopMusic();
