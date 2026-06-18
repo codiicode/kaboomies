@@ -514,12 +514,14 @@ function bumpQuest(room, player, id, n = 1) {
 // drop-to-pot/floor economy in training.
 function settleDeath(room, victim, killer) {
   victim.streak = 0;
-  if (!isRanked(room)) return;                 // practice (solo + bots): no chips move
+  // practice (solo + bots) or a bot victim: no chips move. bots have no balance,
+  // so we never setBal a bot key (which would leak onto the leaderboard).
+  if (!isRanked(room) || victim.bot) return;
   const stake = room.deathDrop != null ? room.deathDrop : DEATH_DROP;
   const lost = Math.min(stake, bal(victim.key, room.cur));
   if (lost <= 0) return;
-  setBal(victim.key, bal(victim.key, room.cur) - lost, victim.name, room.cur);
-  if (killer && killer.id !== victim.id && killer.alive)
+  setBal(victim.key, bal(victim.key, room.cur) - lost, victim.name, room.cur);   // human victim loses the stake
+  if (killer && killer.id !== victim.id && killer.alive && !killer.bot)          // only a living human killer collects
     setBal(killer.key, bal(killer.key, room.cur) + lost, killer.name, room.cur);
 }
 
@@ -610,7 +612,7 @@ function maybeEndRound(room) {
     if (w) {
       room.winner = w.name;
       let payout = 0;
-      if (isRanked(room)) {
+      if (isRanked(room) && !w.bot) {            // a bot winner persists nothing (kept off the leaderboard)
         w.wins++;
         const cfg = MAPS[room.mapId];
         const rake = (cfg && cfg.wager) ? Math.round(room.pot * cfg.rake) : 0;

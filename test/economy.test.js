@@ -56,3 +56,15 @@ test("settleDeath moves balances only in a ranked room (>=2 humans)", () => {
   assert.strictEqual(game.bal("rkV","play"),150); // transferred
   assert.strictEqual(game.bal("rkK","play"),150);
 });
+
+test("settleDeath never moves chips to/from bots (no leaderboard leak)", () => {
+  store.setBalance("rkH", 200, "H", "play");
+  const rm = rankedRoom(100, 2); // ranked
+  // human kills a bot: bot keeps default balance (never setBal'd), human gains nothing
+  game.settleDeath(rm, { id: 50, key: "bot:50", name: "B", alive: false, bot: true }, { id: 1, key: "rkH", name: "H", alive: true });
+  assert.strictEqual(game.bal("bot:50", "play"), 1000); // untouched default
+  // a bot killing a human: human loses the stake (burned), bot is never credited
+  game.settleDeath(rm, { id: 1, key: "rkH", name: "H", alive: false }, { id: 50, key: "bot:50", name: "B", alive: true, bot: true });
+  assert.strictEqual(game.bal("rkH", "play"), 100); // 200 - 100 stake
+  assert.strictEqual(game.bal("bot:50", "play"), 1000); // bot never gains
+});
