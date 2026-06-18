@@ -247,6 +247,7 @@ function newRound(room) {
   let i = 0;
   for (const p of room.players.values()) { resetPlayer(p, sp[i % sp.length]); i++; }
   roundAnte(room);
+  syncBots(room);
 }
 
 function pushEvent(room, ev) {
@@ -297,7 +298,7 @@ function addPlayer(room, p) {
   p.wins = p.wins || 0;
   resetPlayer(p, sp[idx]);
   room.players.set(p.id, p);
-  if (!balances.has(p.key)) balances.set(p.key, START_BAL);
+  if (!p.bot && !balances.has(p.key)) balances.set(p.key, START_BAL); // bots never get a balance row (kept off leaderboard)
   return p;
 }
 
@@ -676,6 +677,34 @@ function botDangerSet(room) {
   return s;
 }
 
+const BOT_NAMES = ["Sparky","Boomer","Dyna","Pixel","Fuse","Blanka","Volt","Nitro","Pop","Tnt"];
+const BOT_LOOKS = [["hero","#e8b07a","#ff5d73"],["house","#e8b07a","#54b8ff"],["hero","#e8b07a","#a06bff"],
+  ["house","#e8b07a","#43d17f"],["hero","#e8b07a","#ffb03a"],["popcat","#e8b07a","#ff5dd8"],["alon","#e8b07a","#37d6ff"]];
+let botSeq = 1000000; // bot ids live well above human nextId
+function botName(room){ const used=new Set([...room.players.values()].map(p=>p.name));
+  const free=BOT_NAMES.filter(n=>!used.has(n)); const pool=free.length?free:BOT_NAMES; return pool[Math.floor(Math.random()*pool.length)]; }
+function makeBot(room){
+  const id=botSeq++; const look=BOT_LOOKS[Math.floor(Math.random()*BOT_LOOKS.length)];
+  const bot={ id, ws:{readyState:3}, key:"bot:"+id, wallet:null, verified:false, voice:false, bot:true,
+    name:botName(room), base:look[0], skin:look[1], clothes:look[2] };
+  addPlayer(room, bot); return bot;
+}
+// fill training rooms to BOT_TARGET while a human is present; fade bots out as humans join.
+function syncBots(room){
+  if (MAPS[room.mapId] && MAPS[room.mapId].wager) return;        // never in wager/real rooms
+  const humans = humanCount(room);
+  const bots = [...room.players.values()].filter(p=>p.bot);
+  if (humans === 0) { for (const b of bots) room.players.delete(b.id); return; } // let the room drop
+  const want = botTarget(humans);
+  if (bots.length < want) { for (let i=bots.length; i<want; i++) makeBot(room); return; }
+  if (bots.length > want) {
+    let remove = bots.length - want;
+    const dead = bots.filter(b=>!b.alive), live = bots.filter(b=>b.alive);
+    for (const b of dead) { if (remove<=0) break; room.players.delete(b.id); remove--; }
+    if (room.phase !== "playing") for (const b of live) { if (remove<=0) break; room.players.delete(b.id); remove--; }
+  }
+}
+
 module.exports = {
   TILE, FUSE, BLAST, START_BAL, DEATH_DROP, SUDDEN_AFTER, CLOSE_EVERY, POT_SHARE, MAX_HP, DMG_CORE, DMG_EDGE,
   KICK_STEP, INVULN_MS, BOUNTY_STEP, BOUNTY_MAX, MAPS, balances,
@@ -684,6 +713,7 @@ module.exports = {
   placeBomb, detonate, explode, settleDeath, tick, snapshot, store, auth,
   buildProfile, buildQuests, bumpQuest, characters,
   humanCount, isRanked, botTarget, botWalkable, botBlastCells, botDangerSet,
+  makeBot, syncBots,
 };
 
 // ---------- live server (exported so tests can start it on an ephemeral port) ----------
@@ -807,6 +837,7 @@ function startServer(port) {
           base: allowedBase, skin: m.skin || "#e8b07a", clothes: m.clothes || "#7d8aa0",
         };
         addPlayer(room, player);
+        syncBots(room);
         if (MAPS[room.mapId].wager && room.phase === "playing") roundAnte(room); // join the current pot
         const today = quests.dayIndex(Date.now());
         let streakResult = null;
@@ -860,7 +891,8 @@ function startServer(port) {
             if (p.id !== player.id && p.ws.readyState === 1)
               p.ws.send(JSON.stringify({ t: "voice-peer-left", id: player.id }));
         room.players.delete(player.id);
-        if (room.players.size === 0) { clearTimeout(room.roundTimer); dropRoom(room); }
+        syncBots(room);
+        if (humanCount(room) === 0) { clearTimeout(room.roundTimer); for (const b of [...room.players.values()]) room.players.delete(b.id); dropRoom(room); }
       }
     });
   });
