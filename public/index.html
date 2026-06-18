@@ -1055,6 +1055,7 @@ let charProg={};          // base -> {prog,target,label}
 async function loadCharacters(){
   if(!charReqs){ try{ const r=await fetch("/characters"); const j=await r.json(); charReqs=j.reqs||[]; }catch(e){ charReqs=[]; } }
   charUnlock=new Set(["hero"]); charProg={};
+  if(walletAddr) await ensureSigner();
   const auth = walletAddr ? await signLogin() : null;
   if(auth&&walletAddr){
     try{ const r=await fetch("/profile",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({wallet:walletAddr,auth})});
@@ -1132,6 +1133,7 @@ const PRIVY_APP_ID = "cmqgh17v4006f0blaniphwsng"; // public client id — safe i
 let _privyMethods=null, _privyMounting=false;
 async function mountPrivy(){
   if(_privyMethods||_privyMounting)return;_privyMounting=true;
+  try{
   const [{default:React},{createRoot},Privy]=await Promise.all([
     import("https://esm.sh/react@18"),
     import("https://esm.sh/react-dom@18/client"),
@@ -1151,8 +1153,22 @@ async function mountPrivy(){
   createRoot(host).render(React.createElement(PrivyProvider,{appId:PRIVY_APP_ID,
     config:{embeddedWallets:{createOnLogin:"users-without-wallets"}, loginMethods:["email","google","twitter","discord","apple"]}},
     React.createElement(Bridge,null)));
-  await new Promise(r=>setTimeout(r,500));_privyMounting=false;
+  await new Promise(r=>setTimeout(r,500));
+  } finally { _privyMounting=false; }
 }
+// After a reload, walletAddr is restored from storage but activeSigner is NOT (it is
+// only set live by the wallet provider). Re-mount Privy so its restored session
+// re-runs setIdentity and re-establishes the signer; then wait briefly for it.
+async function ensureSigner(){
+  if(activeSigner) return true;
+  if(!walletAddr) return false;
+  if(PRIVY_APP_ID){ try{ await mountPrivy(); }catch(e){} }
+  for(let i=0;i<24 && !activeSigner;i++) await new Promise(r=>setTimeout(r,150));
+  return !!activeSigner;
+}
+// returning user: kick off signer restoration on load so signed actions (profile,
+// unlocks, verified joins) work after a reload without a manual reconnect.
+if(PRIVY_APP_ID && walletAddr) mountPrivy().catch(()=>{});
 async function loginWithPrivy(){
   if(!PRIVY_APP_ID){setWalletMsg("Email/social login needs a Privy App ID (see README).");return;}
   try{setWalletMsg("Loading sign-in…");if(!_privyMethods)await mountPrivy();
@@ -1366,17 +1382,20 @@ function renderScores(scores){const host=$("highscores");if(!host)return;host.in
   scores.slice(0,10).forEach((s,i)=>{const r=document.createElement("div");r.className="hr";
     r.innerHTML='<span>'+(i+1)+'. '+s.name+'</span><span><b>'+s.balance+'</b> 🪙</span>';host.appendChild(r);});
 }
-async function joinMap(id){selMap=id;Store.set("bb_map",id);initAudio();pendingAuth=await signLogin();connect();}
+async function joinMap(id){selMap=id;Store.set("bb_map",id);initAudio();if(walletAddr)await ensureSigner();pendingAuth=await signLogin();connect();}
 
 async function openProfile(){
   showScreen("profile");
   const guest=$("profile-guest");
+  if(walletAddr) await ensureSigner(); // restore the signer if we have a wallet but no live signer (e.g. after reload)
   const auth=await signLogin();
   if(!auth||!walletAddr){ guest.style.display="block";
     ["profile-stats","profile-quests","profile-streak"].forEach(id=>$(id).innerHTML="");
-    $("profile-name").textContent="Guest"; $("profile-wallet").textContent="";
+    $("profile-name").textContent=walletAddr?"Signed in":"Guest"; $("profile-wallet").textContent="";
     $("profile-lvl").textContent="—"; $("profile-xp").textContent=""; $("profile-xpbar").style.width="0%";
-    const gav=$("profile-av"); if(gav){const g=gav.getContext("2d");g.clearRect(0,0,gav.width,gav.height);} return; }
+    const gav=$("profile-av"); if(gav){const g=gav.getContext("2d");g.clearRect(0,0,gav.width,gav.height);}
+    guest.textContent=walletAddr?"Couldn't verify your wallet — go back and reconnect (Email / Social or Connect Wallet) to see your stats.":"Log in with your wallet to track stats and earn XP from daily quests.";
+    return; }
   guest.style.display="none";
   let p; try{ const r=await fetch("/profile",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({wallet:walletAddr,auth})}); if(!r.ok)throw 0; p=await r.json(); }
