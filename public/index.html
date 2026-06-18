@@ -15,7 +15,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 <style>
-  :root{--ink:#141414;--paper:#fff;--red:#ff3b30;--grey:#7a7a7a;--line:#141414;
+  :root{--ink:#141414;--paper:#fff;--red:#ff3b30;--grey:#7a7a7a;--line:#141414;--gold:#f5a623;--gold-deep:#b9821a;
     --display:'Press Start 2P',ui-monospace,monospace;--body:'VT323',ui-monospace,monospace;}
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
   html,body{height:100%;overscroll-behavior:none;}
@@ -141,6 +141,40 @@
   .arena-card .live{display:inline-block;width:8px;height:8px;background:#43d17f;border:1px solid var(--ink);margin-right:6px;}
   .arena-card .stake{font-family:var(--display);font-size:12px;color:#b9821a;margin:10px 0 4px;}
   .arena-card .stake b{color:var(--ink);}
+  /* ── premium: High Roller (gold / high-stakes) ── */
+  .arena-card.premium{position:relative;overflow:hidden;border-color:var(--gold-deep);
+    box-shadow:5px 5px 0 var(--gold-deep);
+    background:
+      linear-gradient(135deg,rgba(245,166,35,.10) 0%,rgba(245,166,35,0) 38%) ,
+      repeating-linear-gradient(45deg,rgba(185,130,26,.05) 0 6px,transparent 6px 12px),
+      #fffdf6;}
+  .arena-card.premium:hover{box-shadow:7px 7px 0 var(--gold-deep);}
+  .arena-card.premium:active{box-shadow:2px 2px 0 var(--gold-deep);}
+  /* inner gold frame + corner coins */
+  .arena-card.premium::before{content:"👑 HIGH STAKES";position:absolute;top:0;right:0;z-index:2;
+    font-family:var(--display);font-size:7px;line-height:1;letter-spacing:.02em;color:var(--ink);
+    background:var(--gold);border-left:3px solid var(--ink);border-bottom:3px solid var(--ink);
+    padding:5px 7px 4px;box-shadow:-2px 2px 0 rgba(20,20,20,.25);}
+  .arena-card.premium::after{content:"";position:absolute;inset:5px;pointer-events:none;z-index:1;
+    border:1px dashed var(--gold-deep);}
+  .arena-card.premium .an{color:var(--gold-deep);text-shadow:1px 1px 0 rgba(245,166,35,.35);
+    padding-right:84px;}
+  .arena-card.premium .stake{color:var(--gold-deep);font-size:13px;}
+  .arena-card.premium .stake b{color:#a16a00;text-shadow:1px 1px 0 rgba(245,166,35,.5);}
+  /* coin motif appended to the stake line */
+  .arena-card.premium .stake::after{content:" 💰";}
+  .arena-card.premium .ap b{color:var(--gold-deep);}
+  /* keep text above background + frame */
+  .arena-card.premium .an,.arena-card.premium .ad,.arena-card.premium .stake,.arena-card.premium .ap{position:relative;z-index:1;}
+  /* animated sheen sweep (added as a .shimmer span only on the premium card) */
+  .arena-card.premium .shimmer{position:absolute;top:-60%;left:-30%;width:40%;height:220%;z-index:1;
+    pointer-events:none;transform:rotate(18deg);
+    background:linear-gradient(90deg,transparent,rgba(255,240,190,.65),transparent);
+    animation:premSheen 4.2s ease-in-out infinite;}
+  @keyframes premSheen{0%{transform:translateX(-40px) rotate(18deg);}
+    14%{transform:translateX(420px) rotate(18deg);}
+    100%{transform:translateX(420px) rotate(18deg);}}
+  @media(prefers-reduced-motion:reduce){.arena-card.premium .shimmer{animation:none;display:none;}}
   .hs-panel{background:#fff;border:3px solid var(--ink);box-shadow:5px 5px 0 var(--ink);padding:13px;height:fit-content;}
   .hs-title{font-family:var(--display);font-size:9px;color:var(--red);margin-bottom:10px;}
   #highscores .hr{display:flex;justify-content:space-between;gap:10px;font-family:var(--body);font-size:18px;text-transform:uppercase;padding:3px 0;border-bottom:1px dashed #ddd;}
@@ -1323,7 +1357,8 @@ function renderArenas(maps){const host=$("arena-list");if(!host)return;host.inne
       '<div class="an">'+(m.daily?look:m.name)+'</div>'+
       '<div class="ad">'+m.cols+'×'+m.rows+(m.daily?' · today’s seed':'')+'</div>'+
       stake+
-      '<div class="ap"><span class="live"></span>'+m.players+'<b> / '+m.cap+'</b> playing'+(m.rooms>1?(' · '+m.rooms+' rooms'):'')+'</div>';
+      '<div class="ap"><span class="live"></span>'+m.players+'<b> / '+m.cap+'</b> playing'+(m.rooms>1?(' · '+m.rooms+' rooms'):'')+'</div>'+
+      (m.drop>=1000?'<span class="shimmer" aria-hidden="true"></span>':'');
     card.onclick=()=>joinMap(m.id);host.appendChild(card);}
 }
 function renderScores(scores){const host=$("highscores");if(!host)return;host.innerHTML="";
