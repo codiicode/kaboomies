@@ -1302,6 +1302,42 @@ function renderScores(scores){const host=$("highscores");if(!host)return;host.in
 }
 async function joinMap(id){selMap=id;Store.set("bb_map",id);initAudio();pendingAuth=await signLogin();connect();}
 
+async function openProfile(){
+  showScreen("profile");
+  const guest=$("profile-guest");
+  const auth=await signLogin();
+  if(!auth||!walletAddr){ guest.style.display="block";
+    ["profile-stats","profile-quests","profile-streak"].forEach(id=>$(id).innerHTML="");
+    $("profile-name").textContent="Guest"; $("profile-wallet").textContent=""; return; }
+  guest.style.display="none";
+  let p; try{ const r=await fetch("/profile",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({wallet:walletAddr,auth})}); if(!r.ok)throw 0; p=await r.json(); }
+    catch(e){ _authCache=null; guest.style.display="block"; guest.textContent="Couldn't load profile — try again."; return; }
+  renderProfile(p);
+}
+function renderProfile(p){
+  $("profile-name").textContent=p.name||"Player";
+  $("profile-wallet").textContent=walletAddr?(walletAddr.slice(0,4)+"…"+walletAddr.slice(-4)):"";
+  $("profile-lvl").textContent="Lv "+p.level;
+  const pct=p.xp.need?Math.min(100,Math.round(p.xp.into/p.xp.need*100)):0;
+  $("profile-xpbar").style.width=pct+"%";
+  $("profile-xp").textContent=p.xp.into+" / "+p.xp.need+" XP";
+  const s=p.stats, tiles=[["Games",s.games],["Wins",s.wins],["Win %",s.winRate+"%"],
+    ["Kills",s.kills],["Deaths",s.deaths],["K/D",s.kd],
+    ["Best streak",p.streak.best],["Crates",s.crates],["Pickups",s.pickups]];
+  $("profile-stats").innerHTML=tiles.map(t=>'<div class="profile-tile"><div class="v">'+t[1]+'</div><div class="l">'+t[0]+'</div></div>').join("");
+  $("profile-streak").textContent=p.streak.count>0?("🔥 Day "+p.streak.count+" — keep it going!"):"No streak yet — play today to start one.";
+  $("profile-quests").innerHTML=p.quests.map(q=>{
+    const pc=Math.min(100,Math.round((q.prog/q.target)*100));
+    return '<div class="quest-row'+(q.done?' done':'')+'"><div class="top"><span>'+(q.done?'✅ ':'')+q.label+'</span><b>+'+q.xp+' XP</b></div>'+
+      '<div class="bar"><i style="width:'+pc+'%"></i></div><div class="top" style="margin-top:6px;color:#7a7a7a"><span>'+Math.min(q.prog,q.target)+' / '+q.target+'</span><span>'+(q.done?'DONE':'')+'</span></div></div>';
+  }).join("");
+  const av=$("profile-av"); if(av&&typeof drawHero==="function"){ const real=ctx; ctx=av.getContext("2d");
+    ctx.clearRect(0,0,av.width,av.height);
+    drawHero(av.width/2,av.height*0.7,120,{base:playerSkin.base,skin:playerSkin.skin,clothes:playerSkin.clothes,house:playerSkin.house,roof:playerSkin.roof,hat:playerSkin.hat,hatCol:playerSkin.hatCol,face:1,phase:0,moving:false,sp:1,blink:0});
+    ctx=real; }
+}
+
 /* ---------- networking ---------- */
 let ws=null, myId=null, connected=false;
 let COLS=15,ROWS=13,TILE=44,W=660,H=572,FUSE=2400,grid=null;
@@ -1349,6 +1385,7 @@ function connect(){
       if(typeof m.seed==="number"&&curMap.style!=="garden"){curPalette=paletteFromSeed(m.seed);curTheme=themeFromSeed(m.seed);}else{curPalette=null;curTheme=THEMES.classic;}updateArenaName();suddenOn=false;killfeed=[];bubbles={};snowFlakes=[];genCosmetics();
       CV.width=W;CV.height=H;connected=true;showScreen("game");
       const mb=$("mic-btn");if(mb)mb.style.display="";micState("on");
+      if(m.streak&&m.streak.xpAwarded>0)pushFeed("🔥 Day "+m.streak.count+" streak +"+m.streak.xpAwarded+" XP","win");
     } else if(m.t==="blocked"){try{ws.close();}catch(_){}connected=false;
       const n=$("mode-note");
       if(m.reason==="need_wallet"){if(n)n.textContent="Connect your wallet first to play for real money.";}
@@ -1360,6 +1397,7 @@ function connect(){
     else if(m.t==="voice-peer-joined"){/* peer will send us an offer */}
     else if(m.t==="voice-peer-left"){closePeer(m.id);}
     else if(m.t==="rtc"){onSignal(m.from,m.data);}
+    else if(m.t==="toast"){pushFeed((m.kind==="quest"?"✅ ":"🔥 ")+m.label+" +"+m.xp+" XP","win");sfx("win");}
     else if(m.t==="s"){state.players=m.players;state.bombs=m.bombs;state.fires=m.fires;state.ups=m.ups;state.drops=m.drops||[];state.ph=m.ph;state.win=m.win;
       const me=m.players.find(p=>p.id===myId);if(me&&typeof me.bal==="number")myBal=me.bal;
       if(typeof m.pot==="number")myPot=m.pot;
