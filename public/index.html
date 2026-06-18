@@ -140,6 +140,7 @@
   .arena-card .badge{display:inline-block;font-family:var(--display);font-size:7px;color:#fff;background:var(--red);padding:3px 5px;margin-bottom:8px;}
   .arena-card .live{display:inline-block;width:8px;height:8px;background:#43d17f;border:1px solid var(--ink);margin-right:6px;}
   .arena-card .stake{font-family:var(--display);font-size:12px;color:#b9821a;margin:10px 0 4px;}
+  .arena-card .stake.free{color:var(--grey);}
   .arena-card .stake b{color:var(--ink);}
   /* ── premium: High Roller (gold / high-stakes) ── */
   .arena-card.premium{position:relative;overflow:hidden;border-color:var(--gold-deep);
@@ -338,8 +339,8 @@
       <div class="lobby-wrap">
         <div style="flex:1 1 auto;min-width:0">
         <div id="mode-bar" class="mode-bar">
-          <button class="mode-btn active" id="mode-play">🎮 Training · free</button>
           <button class="mode-btn" id="mode-real">💰 Real money · $KABOOM</button>
+          <button class="mode-btn active" id="mode-play">🎮 Training · free</button>
           <button class="mode-btn soon" id="mode-fnf">🔥 FNF Wars · soon</button>
         </div>
         <div id="mode-note" class="mode-note"></div>
@@ -1068,7 +1069,7 @@ async function loadCharacters(){
 }
 let selMap=Store.get("bb_map")||"brawl";
 if(!MAPS.some(m=>m.id===selMap))selMap="brawl";
-let selMode="play", realMoneyEnabled=false;
+let selMode="play", realMoneyEnabled=false, lastMaps=null;
 curMap=MAPS.find(m=>m.id===selMap)||MAPS[0];
 function buildMapPicker(){const host=$("map-picker");if(!host)return;host.innerHTML="";
   MAPS.forEach(m=>{const b=document.createElement("button");b.className="hatbtn"+(selMap===m.id?" sel":"");
@@ -1230,15 +1231,16 @@ $("privy-btn").onclick=()=>loginWithPrivy();
 $("cr-go").onclick=()=>{initAudio();showScreen("lobby");};
 $("lb-back").onclick=()=>showScreen("create");
 function setMode(mode){
-  if(mode==="real"&&!realMoneyEnabled){const n=$("mode-note");if(n)n.textContent="Real money opens when $KABOOM launches — practice in Training meanwhile.";return;}
-  selMode=mode;
+  selMode=mode; // real money is selectable so its stakes preview; the server still gates the actual join until custody+env are configured
   const mp=$("mode-play"),mr=$("mode-real");if(mp)mp.classList.toggle("active",mode==="play");if(mr)mr.classList.toggle("active",mode==="real");
-  const n=$("mode-note");if(n)n.textContent=mode==="real"?"Real $KABOOM stakes — deposit to play, withdraw your winnings.":"Free practice chips — no real money, just get better.";
+  const n=$("mode-note");if(n)n.textContent=mode==="real"
+    ? (realMoneyEnabled?"Real $KABOOM stakes — deposit to play, withdraw your winnings.":"Real $KABOOM stakes · deposits open soon — preview the arenas below.")
+    : "Free practice — no real money, no token cost. Just get better.";
+  if(lastMaps)renderArenas(lastMaps); // stake labels differ by mode
 }
-function updateModeUI(){const rb=$("mode-real");if(!rb)return;
-  rb.classList.toggle("soon",!realMoneyEnabled);
-  rb.textContent=realMoneyEnabled?"💰 Real money · $KABOOM":"💰 Real money · soon";
-  if(!realMoneyEnabled&&selMode==="real")setMode("play");}
+// real money is presented as the primary mode; the server still gates real joins
+// (blocked: real_soon) until KABOOM_MINT/TREASURY_SECRET/SOLANA_RPC are set.
+function updateModeUI(){}
 {const mp=$("mode-play"),mr=$("mode-real");if(mp)mp.onclick=()=>setMode("play");if(mr)mr.onclick=()=>setMode("real");}
 {const mf=$("mode-fnf");if(mf)mf.onclick=()=>{const n=$("mode-note");if(n)n.textContent="FNF Wars — Friday Night Fights. Coming soon.";}; }
 $("nameInp").addEventListener("keydown",e=>{if(e.key==="Enter")$("cr-go").click();});
@@ -1363,12 +1365,15 @@ async function refreshLobby(){
   await pull();
   if(currentScreen==="lobby"&&location.host)lobbyTimer=setInterval(()=>{if(currentScreen==="lobby")pull();else clearInterval(lobbyTimer);},2500);
 }
-function renderArenas(maps){const host=$("arena-list");if(!host)return;host.innerHTML="";
+function renderArenas(maps){const host=$("arena-list");if(!host)return;host.innerHTML="";lastMaps=maps;
   maps.sort((a,b)=>(a.drop||0)-(b.drop||0)); // low -> high stakes
   for(const m of maps){const card=document.createElement("div");
     card.className="arena-card"+(m.daily?" daily":"")+(m.drop>=1000?" premium":"");
     const look=m.daily&&typeof m.seed==="number"?themeFromSeed(m.seed).name:(m.name);
-    const stake=(typeof m.drop==="number")?('<div class="stake">🪙 <b>±'+m.drop+'</b> $KABOOM · per kill/death</div>'):'';
+    // training is free (no token cost shown); real money shows the $KABOOM stakes
+    const stake=(selMode==="real"&&typeof m.drop==="number")
+      ? '<div class="stake">🪙 <b>±'+m.drop+'</b> $KABOOM · per kill/death</div>'
+      : '<div class="stake free">🎮 Free practice · no token cost</div>';
     card.innerHTML=(m.daily?'<span class="badge">★ DAILY</span><br>':'')+
       '<div class="an">'+(m.daily?look:m.name)+'</div>'+
       '<div class="ad">'+m.cols+'×'+m.rows+(m.daily?' · today’s seed':'')+'</div>'+
@@ -1479,7 +1484,7 @@ function connect(){
     } else if(m.t==="blocked"){try{ws.close();}catch(_){}connected=false;
       const n=$("mode-note");
       if(m.reason==="need_wallet"){if(n)n.textContent="Connect your wallet first to play for real money.";}
-      else{realMoneyEnabled=false;updateModeUI();setMode("play");if(n)n.textContent="Real money opens when $KABOOM launches — playing Training instead.";}
+      else{realMoneyEnabled=false;updateModeUI();setMode("play");if(n)n.textContent="Real money launches with deposits soon — playing Training for now.";}
       showScreen("lobby");
     } else if(m.t==="round"){grid=m.grid;state.win=m.win||"";suddenOn=false;myPot=0;
       if(typeof m.seed==="number"&&curMap.style!=="garden"){curPalette=paletteFromSeed(m.seed);curTheme=themeFromSeed(m.seed);}snowFlakes=[];updateArenaName();genCosmetics();}
