@@ -163,10 +163,12 @@
   @media(hover:none) and (pointer:coarse){#emote-bar{bottom:auto;top:64px;left:16px;transform:none;flex-wrap:wrap;max-width:92px;}}
 
   /* ---- PROFILE ---- */
-  #screen-profile.active{position:fixed;inset:0;z-index:50;overflow:auto;
+  #screen-profile.active{position:fixed;inset:0;z-index:50;overflow-y:auto;
     background:#fff;background-image:linear-gradient(#ededed 1px,transparent 1px),linear-gradient(90deg,#ededed 1px,transparent 1px);background-size:26px 26px;}
+  #profile-back{position:fixed;top:calc(18px + env(safe-area-inset-top));left:calc(18px + env(safe-area-inset-left));z-index:60;}
   .profile-wrap{max-width:560px;margin:0 auto;padding:64px 16px calc(40px + env(safe-area-inset-bottom));}
   .profile-head{display:flex;gap:16px;align-items:center;background:#fff;border:3px solid var(--ink);box-shadow:5px 5px 0 var(--ink);padding:14px;margin-bottom:16px;}
+  .profile-id{flex:1;min-width:0;}
   #profile-av{width:90px;height:auto;flex:none;image-rendering:auto;}
   .profile-name{font-family:var(--display);font-size:14px;margin-bottom:6px;}
   .profile-wallet{font-family:var(--body);font-size:16px;color:var(--grey);text-transform:uppercase;margin-bottom:8px;}
@@ -311,7 +313,7 @@
   </section>
 
   <section class="screen" id="screen-profile">
-    <button class="wbtn" id="profile-back" onclick="showScreen('lobby')" style="position:fixed;top:18px;left:18px;z-index:60">&lt; BACK</button>
+    <button class="wbtn" id="profile-back" onclick="showScreen('lobby')">&lt; BACK</button>
     <div class="profile-wrap">
       <div class="profile-head">
         <canvas id="profile-av" width="150" height="182"></canvas>
