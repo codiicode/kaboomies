@@ -52,22 +52,25 @@ test("POST /profile returns a profile for a valid signature, 401 otherwise", asy
   await new Promise(r => server.once("listening", r));
   const port = server.address().port;
 
-  const post = (obj) => new Promise((resolve) => {
+  const post = (obj) => new Promise((resolve, reject) => {
     const data = JSON.stringify(obj);
     const req = http.request({ host: "127.0.0.1", port, path: "/profile", method: "POST",
       headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data) } },
       (res) => { let b = ""; res.on("data", c => b += c); res.on("end", () => resolve({ status: res.statusCode, body: b })); });
+    req.on("error", reject);
     req.end(data);
   });
 
-  const ok = await post(signedBody());
-  assert.strictEqual(ok.status, 200);
-  const prof = JSON.parse(ok.body);
-  assert.strictEqual(prof.quests.length, 3);
-  assert.ok(prof.level >= 1);
+  try {
+    const ok = await post(signedBody());
+    assert.strictEqual(ok.status, 200);
+    const prof = JSON.parse(ok.body);
+    assert.strictEqual(prof.quests.length, 3);
+    assert.ok(prof.level >= 1);
 
-  const bad = await post({ wallet: "nope", auth: { ts: Date.now(), sig: [1, 2, 3] } });
-  assert.strictEqual(bad.status, 401);
-
-  await new Promise(r => server.close(r));
+    const bad = await post({ wallet: "nope", auth: { ts: Date.now(), sig: [1, 2, 3] } });
+    assert.strictEqual(bad.status, 401);
+  } finally {
+    await new Promise(r => server.close(r));
+  }
 });

@@ -684,9 +684,19 @@ function startServer(port) {
     ".png": "image/png", ".jpg": "image/jpeg", ".ico": "image/x-icon", ".json": "application/json" };
   const server = http.createServer((req, res) => {
     if (req.method === "POST" && (req.url || "").split("?")[0] === "/profile") {
-      let body = "";
-      req.on("data", (c) => { body += c; if (body.length > 4096) req.destroy(); });
+      let body = "", aborted = false;
+      req.on("data", (c) => {
+        if (aborted) return;
+        body += c;
+        if (body.length > 4096) { // reply cleanly instead of RST-ing the client
+          aborted = true;
+          res.writeHead(413, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "payload_too_large" }));
+          req.destroy();
+        }
+      });
       req.on("end", () => {
+        if (aborted) return;
         try {
           const m = JSON.parse(body || "{}");
           if (!(m.wallet && m.auth && auth.verify(m.wallet, m.auth.ts, m.auth.sig))) {
