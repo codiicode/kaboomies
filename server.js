@@ -383,7 +383,7 @@ function movePlayer(room, pl) {
       bumpQuest(room, pl, "pickups");
     }
   }
-  // $KABOOM token drops
+  // $KABOOM token drops (reserved for wager rooms; always empty in training since settleDeath transfers directly)
   for (let i = room.drops.length - 1; i >= 0; i--) {
     if (room.drops[i].c === pc && room.drops[i].r === pr) {
       setBal(pl.key, bal(pl.key, room.cur) + room.drops[i].a, null, room.cur);
