@@ -1312,9 +1312,12 @@ async function openProfile(){
   guest.style.display="none";
   let p; try{ const r=await fetch("/profile",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({wallet:walletAddr,auth})}); if(!r.ok)throw 0; p=await r.json(); }
-    catch(e){ _authCache=null; guest.style.display="block"; guest.textContent="Couldn't load profile — try again."; return; }
+    catch(e){ _authCache=null;
+      ["profile-stats","profile-quests","profile-streak"].forEach(id=>$(id).innerHTML="");
+      guest.style.display="block"; guest.textContent="Couldn't load profile — try again."; return; }
   renderProfile(p);
 }
+function esc(s){const d=document.createElement("div");d.textContent=s==null?"":s;return d.innerHTML;}
 function renderProfile(p){
   $("profile-name").textContent=p.name||"Player";
   $("profile-wallet").textContent=walletAddr?(walletAddr.slice(0,4)+"…"+walletAddr.slice(-4)):"";
@@ -1329,7 +1332,7 @@ function renderProfile(p){
   $("profile-streak").textContent=p.streak.count>0?("🔥 Day "+p.streak.count+" — keep it going!"):"No streak yet — play today to start one.";
   $("profile-quests").innerHTML=p.quests.map(q=>{
     const pc=Math.min(100,Math.round((q.prog/q.target)*100));
-    return '<div class="quest-row'+(q.done?' done':'')+'"><div class="top"><span>'+(q.done?'✅ ':'')+q.label+'</span><b>+'+q.xp+' XP</b></div>'+
+    return '<div class="quest-row'+(q.done?' done':'')+'"><div class="top"><span>'+(q.done?'✅ ':'')+esc(q.label)+'</span><b>+'+(+q.xp||0)+' XP</b></div>'+
       '<div class="bar"><i style="width:'+pc+'%"></i></div><div class="top" style="margin-top:6px;color:#7a7a7a"><span>'+Math.min(q.prog,q.target)+' / '+q.target+'</span><span>'+(q.done?'DONE':'')+'</span></div></div>';
   }).join("");
   const av=$("profile-av"); if(av&&typeof drawHero==="function"){ const real=ctx; ctx=av.getContext("2d");
