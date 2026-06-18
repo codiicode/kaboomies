@@ -413,7 +413,8 @@ function detonate(room, pl) {
 function explode(room, b) {
   const cells = [{ c: b.col, r: b.row, d: 0 }];
   const newUps = [];
-  const ownerKey = (room.players.get(b.owner) || {}).key;
+  const ownerPlayer = room.players.get(b.owner) || null;
+  const ownerKey = ownerPlayer ? ownerPlayer.key : undefined;
   const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
   for (const [dc, dr] of dirs) {
     for (let i = 1; i <= b.range; i++) {
@@ -427,7 +428,7 @@ function explode(room, b) {
         room.destroyed.push({ c, r });
         gainXp(room, ownerKey, XP_CRATE);
         store.bumpStat(ownerKey, "crates");
-        bumpQuest(room, [...room.players.values()].find(p => p.key === ownerKey), "crates");
+        bumpQuest(room, ownerPlayer, "crates");
         if (Math.random() < 0.30) {
           const pool = ["bomb", "fire", "speed"];
           newUps.push({ c, r, k: pool[Math.floor(Math.random() * pool.length)] });
@@ -736,9 +737,9 @@ if (require.main === module) {
         };
         addPlayer(room, player);
         if (MAPS[room.mapId].wager && room.phase === "playing") roundAnte(room); // join the current pot
+        const today = quests.dayIndex(Date.now());
         let streakResult = null;
         if (player.verified) {
-          const today = quests.dayIndex(Date.now());
           const st = quests.nextStreak(store.getStreak(key), today);
           store.setStreak(key, { count: st.count, best: st.best, day: st.day });
           if (st.xpAwarded > 0) gainXp(room, key, st.xpAwarded);
@@ -749,7 +750,7 @@ if (require.main === module) {
           W: room.W, H: room.H, fuse: FUSE, grid: room.grid, bal: bal(key, room.cur), seed: room.seed,
           verified, pot: room.pot, drop: room.deathDrop,
           wager: !!MAPS[room.mapId].wager, ante: MAPS[room.mapId].ante || 0, rake: MAPS[room.mapId].rake || 0,
-          quests: player.verified ? buildQuests(key, quests.dayIndex(Date.now())) : null,
+          quests: player.verified ? buildQuests(key, today) : null,
           streak: streakResult,
         }));
       } else if (!player || !room) {
