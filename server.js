@@ -752,6 +752,16 @@ function broadcast(room, obj) {
   for (const p of room.players.values()) if (p.ws && p.ws.readyState === 1) p.ws.send(str);
 }
 
+// per-connection token bucket: legit play stays well under `rate`/sec; floods are
+// shed (return false). `state` = { tokens, last, over }. Pure (now injected) -> testable.
+function rateAllow(state, now, rate = 30, burst = 50) {
+  state.tokens = Math.min(burst, state.tokens + (now - state.last) * rate / 1000);
+  state.last = now;
+  if (state.tokens >= 1) { state.tokens -= 1; state.over = 0; return true; }
+  state.over = (state.over || 0) + 1;
+  return false;
+}
+
 module.exports = {
   TILE, FUSE, BLAST, START_BAL, DEATH_DROP, SUDDEN_AFTER, CLOSE_EVERY, POT_SHARE, MAX_HP, DMG_CORE, DMG_EDGE,
   KICK_STEP, INVULN_MS, BOUNTY_STEP, BOUNTY_MAX, MAPS, balances,
@@ -760,7 +770,7 @@ module.exports = {
   placeBomb, detonate, explode, settleDeath, tick, snapshot, store, auth,
   buildProfile, buildQuests, bumpQuest, characters,
   humanCount, isRanked, botTarget, botWalkable, botBlastCells, botDangerSet,
-  makeBot, syncBots, broadcast,
+  makeBot, syncBots, broadcast, rateAllow,
 };
 
 // ---------- live server (exported so tests can start it on an ephemeral port) ----------
@@ -857,12 +867,17 @@ function startServer(port) {
     });
   });
 
-  const wss = new WebSocketServer({ server });
+  const wss = new WebSocketServer({ server, maxPayload: 16384 }); // cap payloads (blocks memory bombs; fits SDP)
   wss.on("connection", (ws) => {
     let player = null, room = null;
+    const rl = { tokens: 50, last: Date.now(), over: 0 }; // per-connection rate bucket
+    let joins = 0;
     ws.on("message", (raw) => {
+      if (!rateAllow(rl, Date.now())) { if (rl.over > 200) { try { ws.close(1008, "rate"); } catch (e) {} } return; } // shed floods
       let m; try { m = JSON.parse(raw); } catch (e) { return; }
       if (m.t === "join") {
+        if (player) return;        // one successful join per connection (no player-leak / re-key)
+        if (++joins > 15) return;  // cap auth.verify attempts per connection
         const mapId = MAPS[m.map] ? m.map : DEFAULT_MAP;
         const mode = (m.mode === "real") ? "real" : "play";
         // signed-login: only key by a wallet the player proved they own
@@ -880,7 +895,7 @@ function startServer(port) {
         const allowedBase = characters.isUnlocked(m.base, ustats) ? m.base : characters.DEFAULT_BASE;
         player = {
           id, ws, key, wallet: verified ? m.wallet : null, verified, voice: false,
-          name: (m.name || "Player").slice(0, 14),
+          name: String(m.name == null ? "Player" : m.name).slice(0, 14),
           base: allowedBase, skin: m.skin || "#e8b07a", clothes: m.clothes || "#7d8aa0",
         };
         addPlayer(room, player);

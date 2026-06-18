@@ -63,3 +63,14 @@ test("broadcast skips bots (stub ws, no send) and never throws", () => {
   assert.doesNotThrow(() => game.broadcast(rm, { t: "round", x: 1 }));
   assert.strictEqual(humanGot, JSON.stringify({ t: "round", x: 1 })); // human received it
 });
+
+test("rateAllow: allows a burst, blocks when drained, refills over time", () => {
+  const st = { tokens: 50, last: 1000, over: 0 };
+  let allowed = 0;
+  for (let i = 0; i < 50; i++) if (game.rateAllow(st, 1000, 30, 50)) allowed++; // same instant: no refill
+  assert.strictEqual(allowed, 50);                              // full burst passes
+  assert.strictEqual(game.rateAllow(st, 1000, 30, 50), false);  // drained -> blocked
+  assert.ok(st.over >= 1);                                      // tracks consecutive blocks
+  assert.strictEqual(game.rateAllow(st, 2000, 30, 50), true);   // ~1s later refills ~30 tokens
+  assert.strictEqual(st.over, 0);                               // reset on allow
+});
