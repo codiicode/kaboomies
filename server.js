@@ -761,7 +761,7 @@ function startServer(port) {
         room = roomFor(mapId, mode);
         const id = nextId++;
         const key = verified ? String(m.wallet).slice(0, 64) : ("guest:" + id);
-        const ustats = verified ? { ...store.getStats(key), level: store.levelFromXp(store.getXp(key)) } : {};
+        const ustats = verified ? { ...store.getStats(key), wins: store.getWins(key), level: store.levelFromXp(store.getXp(key)) } : {};
         const allowedBase = characters.isUnlocked(m.base, ustats) ? m.base : characters.DEFAULT_BASE;
         player = {
           id, ws, key, wallet: verified ? m.wallet : null, verified, voice: false,
