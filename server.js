@@ -290,6 +290,7 @@ function resetPlayer(p, s) {
   p.kick = false; p.remote = false; p.pierce = false; p.shield = 0; p.vuln = 0; p.streak = 0; p.anted = false;
   p.maxHp = MAX_HP; p.hp = MAX_HP; p.hitBlasts = new Set();
   p.ignore = new Set(); p.in = {};
+  p.ai = { tc: Math.round((p.x - TILE/2)/TILE), tr: Math.round((p.y - TILE/2)/TILE), flee: false };
 }
 
 function addPlayer(room, p) {
@@ -526,6 +527,7 @@ function settleDeath(room, victim, killer) {
 }
 
 function tick(room, dt) {
+  if (room.phase === "playing") for (const p of room.players.values()) if (p.bot && p.alive && p.ai) botThink(room, p);
   if (room.phase === "playing") for (const pl of room.players.values()) movePlayer(room, pl);
   for (const pl of room.players.values()) if (pl.vuln > 0) pl.vuln = Math.max(0, pl.vuln - dt);
 
@@ -677,6 +679,42 @@ function botDangerSet(room) {
   const s = new Set();
   for (const b of room.bombs) for (const k of botBlastCells(room, b.col, b.row, b.range)) s.add(k);
   return s;
+}
+function botThink(room, bot) {
+  const c = Math.round((bot.x - TILE/2)/TILE), r = Math.round((bot.y - TILE/2)/TILE);
+  const cx = c*TILE + TILE/2, cy = r*TILE + TILE/2;
+  const centered = Math.abs(bot.x - cx) < 3 && Math.abs(bot.y - cy) < 3;
+  const danger = botDangerSet(room);
+  const players = [...room.players.values()];
+  if (centered) {
+    bot.x = cx; bot.y = cy;
+    if (danger.has(c + "," + r)) {
+      const safe = [[c+1,r],[c-1,r],[c,r+1],[c,r-1]].filter(([nc,nr]) => botWalkable(room,nc,nr) && !danger.has(nc+","+nr));
+      bot.ai.tc = safe.length ? safe[0][0] : c; bot.ai.tr = safe.length ? safe[0][1] : r; bot.ai.flee = true;
+    } else {
+      bot.ai.flee = false;
+      const adjCrate = [[c+1,r],[c-1,r],[c,r+1],[c,r-1]].some(([nc,nr]) => nr>=0&&nc>=0&&nr<room.rows&&nc<room.cols&&room.grid[nr][nc]===2);
+      let ed = 99; for (const q of players){ if (q===bot||!q.alive) continue; const qc=Math.round((q.x-TILE/2)/TILE),qr=Math.round((q.y-TILE/2)/TILE); ed=Math.min(ed,Math.abs(qc-c)+Math.abs(qr-r)); }
+      const canBomb = room.bombs.filter(b=>b.owner===bot.id).length < bot.maxBombs && room.grid[r][c]===0 && !room.bombs.some(b=>b.col===c&&b.row===r);
+      if (canBomb && (adjCrate || ed <= bot.range+1) && Math.random() < 0.85) {
+        const blast = botBlastCells(room, c, r, bot.range);
+        const esc = [[c+1,r],[c-1,r],[c,r+1],[c,r-1]].find(([nc,nr]) => botWalkable(room,nc,nr) && !blast.has(nc+","+nr));
+        if (esc) { placeBomb(room, bot); bot.ai.tc=esc[0]; bot.ai.tr=esc[1]; bot.ai.flee=true; }
+        else if (ed <= 1) { placeBomb(room, bot); const any=[[c+1,r],[c-1,r],[c,r+1],[c,r-1]].find(([nc,nr])=>botWalkable(room,nc,nr)); if(any){bot.ai.tc=any[0];bot.ai.tr=any[1];bot.ai.flee=true;}else{bot.ai.tc=c;bot.ai.tr=r;} }
+        else { bot.ai.tc=c; bot.ai.tr=r; }
+      } else {
+        let opts = [[c+1,r],[c-1,r],[c,r+1],[c,r-1]].filter(([nc,nr]) => botWalkable(room,nc,nr) && !danger.has(nc+","+nr));
+        if (!opts.length) opts = [[c+1,r],[c-1,r],[c,r+1],[c,r-1]].filter(([nc,nr]) => botWalkable(room,nc,nr));
+        if (opts.length) {
+          let tgt=null,best=1e9; for (const q of players){ if(q===bot||!q.alive)continue; const qc=Math.round((q.x-TILE/2)/TILE),qr=Math.round((q.y-TILE/2)/TILE); const d=Math.abs(qc-c)+Math.abs(qr-r); if(d<best){best=d;tgt=[qc,qr];} }
+          if (tgt && Math.random() < 0.8) { opts.sort((a,b)=>(Math.abs(a[0]-tgt[0])+Math.abs(a[1]-tgt[1]))-(Math.abs(b[0]-tgt[0])+Math.abs(b[1]-tgt[1]))); bot.ai.tc=opts[0][0]; bot.ai.tr=opts[0][1]; }
+          else { const pick=opts[Math.floor(Math.random()*opts.length)]; bot.ai.tc=pick[0]; bot.ai.tr=pick[1]; }
+        } else { bot.ai.tc=c; bot.ai.tr=r; }
+      }
+    }
+  }
+  const tx = bot.ai.tc*TILE + TILE/2, ty = bot.ai.tr*TILE + TILE/2;
+  bot.in = { l: bot.x > tx+1, r: bot.x < tx-1, u: bot.y > ty+1, d: bot.y < ty-1 };
 }
 
 const BOT_NAMES = ["Sparky","Boomer","Dyna","Pixel","Fuse","Blanka","Volt","Nitro","Pop","Tnt"];
