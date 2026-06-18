@@ -7,7 +7,12 @@ const game = require("../server");
 const store = game.store;
 test.after(() => { try { fs.unlinkSync(TMP); } catch (e) {} });
 
-function room(stake) { return { deathDrop: stake, cur: "play" }; }
+function room(stake) {
+  const players = new Map();
+  players.set(1, { id: 1, key: "h1" });
+  players.set(2, { id: 2, key: "h2" });
+  return { deathDrop: stake, cur: "play", players };
+}
 
 test("settleDeath transfers the stake from victim to killer", () => {
   store.setBalance("ecK", 50, "K", "play"); store.setBalance("ecV", 250, "V", "play");
@@ -34,4 +39,20 @@ test("a dead killer (mutual kill) does not earn", () => {
   game.settleDeath(room(100), { id: 2, key: "ecV4", name: "V", alive: false }, { id: 1, key: "ecK4", name: "K", alive: false });
   assert.strictEqual(game.bal("ecV4", "play"), 0);
   assert.strictEqual(game.bal("ecK4", "play"), 100);
+});
+
+function rankedRoom(stake, humans){ const players=new Map();
+  for(let i=0;i<humans;i++) players.set(i+1,{id:i+1,key:"w"+i});
+  return { deathDrop:stake, cur:"play", players }; }
+
+test("settleDeath moves balances only in a ranked room (>=2 humans)", () => {
+  store.setBalance("rkK",50,"K","play"); store.setBalance("rkV",250,"V","play");
+  const solo=rankedRoom(100,1); // 1 human => not ranked
+  game.settleDeath(solo, {id:9,key:"rkV",name:"V",alive:false}, {id:8,key:"rkK",name:"K",alive:true});
+  assert.strictEqual(game.bal("rkV","play"),250); // unchanged (practice)
+  assert.strictEqual(game.bal("rkK","play"),50);
+  const ranked=rankedRoom(100,2);
+  game.settleDeath(ranked, {id:9,key:"rkV",name:"V",alive:false}, {id:8,key:"rkK",name:"K",alive:true});
+  assert.strictEqual(game.bal("rkV","play"),150); // transferred
+  assert.strictEqual(game.bal("rkK","play"),150);
 });

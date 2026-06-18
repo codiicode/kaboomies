@@ -275,7 +275,7 @@ function closeRing(room) {
   for (const pl of room.players.values()) {
     if (!pl.alive) continue;
     const c = Math.round((pl.x - TILE / 2) / TILE), r = Math.round((pl.y - TILE / 2) / TILE);
-    if (wset.has(c + "," + r)) { pl.alive = false; store.bumpStat(pl.key, "deaths"); pushEvent(room, { k: "crush", who: pl.name }); settleDeath(room, pl, null); }
+    if (wset.has(c + "," + r)) { pl.alive = false; if (isRanked(room) && !pl.bot) store.bumpStat(pl.key, "deaths"); pushEvent(room, { k: "crush", who: pl.name }); settleDeath(room, pl, null); }
   }
   room.closeRing++;
   room.sudden = true;
@@ -379,15 +379,15 @@ function movePlayer(room, pl) {
       else if (k === "remote") pl.remote = true;
       else if (k === "pierce") pl.pierce = true;
       else if (k === "shield") pl.shield = Math.min(3, pl.shield + 1);
-      store.bumpStat(pl.key, "pickups");
-      bumpQuest(room, pl, "pickups");
+      if (!pl.bot) gainXp(room, pl.key, XP_PICKUP);
+      if (isRanked(room)) { store.bumpStat(pl.key, "pickups"); bumpQuest(room, pl, "pickups"); }
     }
   }
   // $KABOOM token drops (reserved for wager rooms; always empty in training since settleDeath transfers directly)
   for (let i = room.drops.length - 1; i >= 0; i--) {
     if (room.drops[i].c === pc && room.drops[i].r === pr) {
       setBal(pl.key, bal(pl.key, room.cur) + room.drops[i].a, null, room.cur);
-      gainXp(room, pl.key, XP_PICKUP);
+      if (!pl.bot) gainXp(room, pl.key, XP_PICKUP);
       room.drops.splice(i, 1);
     }
   }
@@ -427,9 +427,8 @@ function explode(room, b) {
       if (t === 2) {
         room.grid[r][c] = 0;
         room.destroyed.push({ c, r });
-        gainXp(room, ownerKey, XP_CRATE);
-        store.bumpStat(ownerKey, "crates");
-        bumpQuest(room, ownerPlayer, "crates");
+        if (ownerPlayer && !ownerPlayer.bot) gainXp(room, ownerKey, XP_CRATE);
+        if (isRanked(room)) { store.bumpStat(ownerKey, "crates"); bumpQuest(room, ownerPlayer, "crates"); }
         if (Math.random() < 0.30) {
           const pool = ["bomb", "fire", "speed"];
           newUps.push({ c, r, k: pool[Math.floor(Math.random() * pool.length)] });
@@ -513,9 +512,10 @@ function bumpQuest(room, player, id, n = 1) {
 // from victim to killer; self/environment deaths burn it. Replaces the old
 // drop-to-pot/floor economy in training.
 function settleDeath(room, victim, killer) {
+  victim.streak = 0;
+  if (!isRanked(room)) return;                 // practice (solo + bots): no chips move
   const stake = room.deathDrop != null ? room.deathDrop : DEATH_DROP;
   const lost = Math.min(stake, bal(victim.key, room.cur));
-  victim.streak = 0;
   if (lost <= 0) return;
   setBal(victim.key, bal(victim.key, room.cur) - lost, victim.name, room.cur);
   if (killer && killer.id !== victim.id && killer.alive)
@@ -565,9 +565,13 @@ function tick(room, dt) {
       pl.hp -= f.dmg;
       if (pl.hp > 0) { pushEvent(room, { k: "hurt", who: pl.name, dmg: f.dmg }); continue; }
       pl.hp = 0; pl.alive = false;
-      store.bumpStat(pl.key, "deaths");
+      if (isRanked(room) && !pl.bot) store.bumpStat(pl.key, "deaths");
       const by = !killer ? "a bomb" : (killer.id === pl.id ? null : killer.name);
-      if (killer && killer.id !== pl.id && killer.alive) { killer.streak = (killer.streak || 0) + 1; gainXp(room, killer.key, XP_KILL); store.bumpStat(killer.key, "kills"); bumpQuest(room, killer, "kills"); }
+      if (killer && killer.id !== pl.id && killer.alive && !killer.bot) {
+        killer.streak = (killer.streak || 0) + 1;
+        gainXp(room, killer.key, XP_KILL);
+        if (isRanked(room)) { store.bumpStat(killer.key, "kills"); bumpQuest(room, killer, "kills"); }
+      }
       pushEvent(room, { k: "kill", who: pl.name, by, self: !!killer && killer.id === pl.id });
       settleDeath(room, pl, killer);
     }
@@ -600,18 +604,21 @@ function maybeEndRound(room) {
   const alive = list.filter(p => p.alive);
   if (alive.length <= 1) {
     room.phase = "roundover";
-    for (const pp of room.players.values()) { store.bumpStat(pp.key, "games"); bumpQuest(room, pp, "games"); }
+    if (isRanked(room)) for (const pp of room.players.values()) { store.bumpStat(pp.key, "games"); bumpQuest(room, pp, "games"); }
     const w = alive[0];
     if (w) {
-      w.wins++;
       room.winner = w.name;
-      const cfg = MAPS[room.mapId];
-      const rake = (cfg && cfg.wager) ? Math.round(room.pot * cfg.rake) : 0;
-      const payout = Math.max(0, room.pot - rake);
-      if (payout > 0) setBal(w.key, bal(w.key, room.cur) + payout, w.name, room.cur);
-      store.bumpWin(w.key, w.name);
-      gainXp(room, w.key, XP_WIN);
-      bumpQuest(room, w, "win");
+      let payout = 0;
+      if (isRanked(room)) {
+        w.wins++;
+        const cfg = MAPS[room.mapId];
+        const rake = (cfg && cfg.wager) ? Math.round(room.pot * cfg.rake) : 0;
+        payout = Math.max(0, room.pot - rake);
+        if (payout > 0) setBal(w.key, bal(w.key, room.cur) + payout, w.name, room.cur);
+        store.bumpWin(w.key, w.name);
+        bumpQuest(room, w, "win");
+      }
+      if (!w.bot) gainXp(room, w.key, XP_WIN);
       pushEvent(room, { k: "win", who: w.name, pot: payout });
     } else {
       room.winner = "Draw";
