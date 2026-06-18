@@ -639,6 +639,36 @@ function snapshot(room) {
   };
 }
 
+// ---- bots: AI helpers + headcount (training rooms only; bots are ephemeral) ----
+const BOT_TARGET = 4; // desired total players in a room while a human is present
+function humanCount(room) { let n = 0; for (const p of room.players.values()) if (!p.bot) n++; return n; }
+function isRanked(room) { return humanCount(room) >= 2; } // <2 humans = practice (XP only)
+function botTarget(humans) { return Math.max(0, Math.min(BOT_TARGET - humans, MAX_PLAYERS - humans)); }
+
+function botWalkable(room, c, r) {
+  return c >= 0 && r >= 0 && c < room.cols && r < room.rows &&
+    room.grid[r][c] === 0 && !room.bombs.some(b => b.col === c && b.row === r);
+}
+function botBlastCells(room, c, r, range) {
+  const s = new Set([c + "," + r]);
+  for (const [dc, dr] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+    for (let i = 1; i <= range; i++) {
+      const nc = c + dc * i, nr = r + dr * i;
+      if (nc < 0 || nr < 0 || nc >= room.cols || nr >= room.rows) break;
+      const t = room.grid[nr][nc];
+      if (t === 1) break;            // wall blocks
+      s.add(nc + "," + nr);
+      if (t === 2) break;            // crate absorbs the rest
+    }
+  }
+  return s;
+}
+function botDangerSet(room) {
+  const s = new Set();
+  for (const b of room.bombs) for (const k of botBlastCells(room, b.col, b.row, b.range)) s.add(k);
+  return s;
+}
+
 module.exports = {
   TILE, FUSE, BLAST, START_BAL, DEATH_DROP, SUDDEN_AFTER, CLOSE_EVERY, POT_SHARE, MAX_HP, DMG_CORE, DMG_EDGE,
   KICK_STEP, INVULN_MS, BOUNTY_STEP, BOUNTY_MAX, MAPS, balances,
@@ -646,6 +676,7 @@ module.exports = {
   makeRoom, newRound, addPlayer, movePlayer, closeRing, dailySeed, roundAnte,
   placeBomb, detonate, explode, settleDeath, tick, snapshot, store, auth,
   buildProfile, buildQuests, bumpQuest, characters,
+  humanCount, isRanked, botTarget, botWalkable, botBlastCells, botDangerSet,
 };
 
 // ---------- live server (exported so tests can start it on an ephemeral port) ----------
