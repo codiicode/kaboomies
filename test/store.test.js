@@ -58,3 +58,10 @@ test("getWins / getName getters", () => {
   assert.strictEqual(store.getWins("walletD"), 1);
   assert.strictEqual(store.getName("walletD"), "Dee");
 });
+
+test("bot: keys are not wallet keys (never persisted)", () => {
+  store.bumpStat("bot:7", "kills", 5);
+  assert.strictEqual(store.getStats("bot:7").kills, 0);
+  store.setStreak("bot:7", { count: 9, best: 9, day: 1 });
+  assert.deepStrictEqual(store.getStreak("bot:7"), { count: 0, best: 0, day: -1 });
+});

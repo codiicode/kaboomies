@@ -118,7 +118,7 @@ function levelProgress(xp) {
 }
 
 // ---- per-account stats / streak / quests (verified wallets only; XP-only economy) ----
-function isWalletKey(key) { return !!key && !key.startsWith("guest:"); }
+function isWalletKey(key) { return !!key && !key.startsWith("guest:") && !key.startsWith("bot:"); }
 
 function getStats(key) {
   const s = mem.stats[key] || {};
