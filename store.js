@@ -21,7 +21,7 @@ const SUPA_URL = process.env.SUPABASE_URL || "";
 const SUPA_KEY = process.env.SUPABASE_SERVICE_KEY || "";
 const useSupa = !!(SUPA_URL && SUPA_KEY);
 
-let mem = { balances: {}, wins: {}, names: {}, xp: {}, real: {} };
+let mem = { balances: {}, wins: {}, names: {}, xp: {}, real: {}, stats: {}, streak: {}, quests: {} };
 let saveTimer = null;
 
 function loadFile() {
@@ -32,6 +32,9 @@ function loadFile() {
     mem.names = j.names || {};
     mem.xp = j.xp || {};
     mem.real = j.real || {};
+    mem.stats = j.stats || {};
+    mem.streak = j.streak || {};
+    mem.quests = j.quests || {};
   } catch (e) { /* fresh */ }
 }
 
@@ -114,4 +117,47 @@ function levelProgress(xp) {
   return { level: lvl, into: xp, need };
 }
 
-module.exports = { init, getBalance, setBalance, bumpWin, topScores, getXp, addXp, levelFromXp, levelProgress, useSupa };
+// ---- per-account stats / streak / quests (verified wallets only; XP-only economy) ----
+function isWalletKey(key) { return !!key && !key.startsWith("guest:"); }
+
+function getStats(key) {
+  const s = mem.stats[key] || {};
+  return { games: s.games || 0, kills: s.kills || 0, deaths: s.deaths || 0,
+           crates: s.crates || 0, pickups: s.pickups || 0 };
+}
+function bumpStat(key, field, n = 1) {
+  if (!isWalletKey(key)) return;
+  const s = mem.stats[key] || (mem.stats[key] = {});
+  s[field] = (s[field] || 0) + n;
+  saveSoon();
+}
+
+function getStreak(key) {
+  const s = mem.streak[key];
+  return s ? { count: s.count || 0, best: s.best || 0, day: typeof s.day === "number" ? s.day : -1 }
+           : { count: 0, best: 0, day: -1 };
+}
+function setStreak(key, st) {
+  if (!isWalletKey(key)) return;
+  mem.streak[key] = { count: st.count, best: st.best, day: st.day };
+  saveSoon();
+}
+
+// returns {day,prog,done}; resets (and persists) when the stored day != today.
+function getQuestState(key, today) {
+  if (!isWalletKey(key)) return { day: today, prog: {}, done: {} };
+  let q = mem.quests[key];
+  if (!q || q.day !== today) { q = { day: today, prog: {}, done: {} }; mem.quests[key] = q; saveSoon(); }
+  return q;
+}
+function setQuestState(key, q) {
+  if (!isWalletKey(key)) return;
+  mem.quests[key] = { day: q.day, prog: q.prog || {}, done: q.done || {} };
+  saveSoon();
+}
+
+function getWins(key) { return mem.wins[key] || 0; }
+function getName(key) { return mem.names[key] || null; }
+
+module.exports = { init, getBalance, setBalance, bumpWin, topScores, getXp, addXp, levelFromXp, levelProgress, useSupa,
+  getStats, bumpStat, getStreak, setStreak, getQuestState, setQuestState, getWins, getName };
