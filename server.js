@@ -275,7 +275,7 @@ function closeRing(room) {
   for (const pl of room.players.values()) {
     if (!pl.alive) continue;
     const c = Math.round((pl.x - TILE / 2) / TILE), r = Math.round((pl.y - TILE / 2) / TILE);
-    if (wset.has(c + "," + r)) { pl.alive = false; store.bumpStat(pl.key, "deaths"); pushEvent(room, { k: "crush", who: pl.name }); killDrop(room, pl); }
+    if (wset.has(c + "," + r)) { pl.alive = false; store.bumpStat(pl.key, "deaths"); pushEvent(room, { k: "crush", who: pl.name }); settleDeath(room, pl, null); }
   }
   room.closeRing++;
   room.sudden = true;
@@ -379,6 +379,8 @@ function movePlayer(room, pl) {
       else if (k === "remote") pl.remote = true;
       else if (k === "pierce") pl.pierce = true;
       else if (k === "shield") pl.shield = Math.min(3, pl.shield + 1);
+      store.bumpStat(pl.key, "pickups");
+      bumpQuest(room, pl, "pickups");
     }
   }
   // $KABOOM token drops
@@ -386,8 +388,6 @@ function movePlayer(room, pl) {
     if (room.drops[i].c === pc && room.drops[i].r === pr) {
       setBal(pl.key, bal(pl.key, room.cur) + room.drops[i].a, null, room.cur);
       gainXp(room, pl.key, XP_PICKUP);
-      store.bumpStat(pl.key, "pickups");
-      bumpQuest(room, pl, "pickups");
       room.drops.splice(i, 1);
     }
   }
@@ -509,20 +509,17 @@ function bumpQuest(room, player, id, n = 1) {
   store.setQuestState(key, q);
 }
 
-function killDrop(room, pl) {
-  const c = Math.round((pl.x - TILE / 2) / TILE), r = Math.round((pl.y - TILE / 2) / TILE);
-  const bounty = Math.min(BOUNTY_MAX, (pl.streak || 0) * BOUNTY_STEP);
-  const amt = Math.min((room.deathDrop != null ? room.deathDrop : DEATH_DROP) + bounty, bal(pl.key, room.cur));
-  pl.streak = 0;
-  if (amt <= 0) return;
-  setBal(pl.key, bal(pl.key, room.cur) - amt, pl.name, room.cur);
-  const potCut = Math.round(amt * POT_SHARE);
-  const coin = amt - potCut;
-  room.pot += potCut;
-  if (coin > 0) {
-    const ex = room.drops.find(d => d.c === c && d.r === r);
-    if (ex) ex.a += coin; else room.drops.push({ c, r, a: coin });
-  }
+// arena stakes: a death transfers exactly `stake` (capped at the victim's balance)
+// from victim to killer; self/environment deaths burn it. Replaces the old
+// drop-to-pot/floor economy in training.
+function settleDeath(room, victim, killer) {
+  const stake = room.deathDrop != null ? room.deathDrop : DEATH_DROP;
+  const lost = Math.min(stake, bal(victim.key, room.cur));
+  victim.streak = 0;
+  if (lost <= 0) return;
+  setBal(victim.key, bal(victim.key, room.cur) - lost, victim.name, room.cur);
+  if (killer && killer.id !== victim.id && killer.alive)
+    setBal(killer.key, bal(killer.key, room.cur) + lost, killer.name, room.cur);
 }
 
 function tick(room, dt) {
@@ -572,7 +569,7 @@ function tick(room, dt) {
       const by = !killer ? "a bomb" : (killer.id === pl.id ? null : killer.name);
       if (killer && killer.id !== pl.id && killer.alive) { killer.streak = (killer.streak || 0) + 1; gainXp(room, killer.key, XP_KILL); store.bumpStat(killer.key, "kills"); bumpQuest(room, killer, "kills"); }
       pushEvent(room, { k: "kill", who: pl.name, by, self: !!killer && killer.id === pl.id });
-      killDrop(room, pl);
+      settleDeath(room, pl, killer);
     }
   }
 
@@ -647,7 +644,7 @@ module.exports = {
   KICK_STEP, INVULN_MS, BOUNTY_STEP, BOUNTY_MAX, MAPS, balances,
   bal, setBal, genGrid, latticeGrid, generateRoom, connected, spawns, clearSpawns, monument,
   makeRoom, newRound, addPlayer, movePlayer, closeRing, dailySeed, roundAnte,
-  placeBomb, detonate, explode, killDrop, tick, snapshot, store, auth,
+  placeBomb, detonate, explode, settleDeath, tick, snapshot, store, auth,
   buildProfile, buildQuests, bumpQuest, characters,
 };
 
