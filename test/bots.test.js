@@ -74,3 +74,14 @@ test("rateAllow: allows a burst, blocks when drained, refills over time", () => 
   assert.strictEqual(game.rateAllow(st, 2000, 30, 50), true);   // ~1s later refills ~30 tokens
   assert.strictEqual(st.over, 0);                               // reset on allow
 });
+
+test("rateAllow: a sustained flood drives `over` past the close threshold", () => {
+  // ~1000 msg/s for ~1s: bucket refills ~30 tokens, the rest are blocked and `over` climbs.
+  const st = { tokens: 50, last: 0, over: 0 };
+  for (let i = 0; i < 1000; i++) game.rateAllow(st, i, 30, 50); // 1ms apart -> ~1000/s
+  assert.ok(st.over > 200, "sustained flood should push over past 200 (close trigger), got " + st.over);
+  // a calm client never accumulates `over`
+  const calm = { tokens: 50, last: 0, over: 0 };
+  for (let i = 0; i < 60; i++) { const allowed = game.rateAllow(calm, i * 200, 30, 50); assert.ok(allowed); } // 5/s
+  assert.strictEqual(calm.over, 0);
+});

@@ -757,7 +757,9 @@ function broadcast(room, obj) {
 function rateAllow(state, now, rate = 30, burst = 50) {
   state.tokens = Math.min(burst, state.tokens + (now - state.last) * rate / 1000);
   state.last = now;
-  if (state.tokens >= 1) { state.tokens -= 1; state.over = 0; return true; }
+  // decay `over` (don't reset) so a time-paced flood still climbs past the close
+  // threshold, while a brief legit burst decays harmlessly back to 0.
+  if (state.tokens >= 1) { state.tokens -= 1; if (state.over > 0) state.over--; return true; }
   state.over = (state.over || 0) + 1;
   return false;
 }
