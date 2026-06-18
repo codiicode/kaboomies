@@ -28,6 +28,7 @@ const XP_KILL = 25, XP_WIN = 100, XP_CRATE = 2, XP_PICKUP = 5; // account-level 
 
 const store = require("./store");
 const auth = require("./auth");
+const quests = require("./quests");
 
 // Each map is its own room. One row taller than before.
 const MAPS = {
@@ -455,6 +456,52 @@ function gainXp(room, key, amt) {
   }
 }
 
+// ---- profile / daily quests / login streak (verified wallets only; XP-only) ----
+function buildQuests(key, today) {
+  const q = store.getQuestState(key, today);
+  return quests.todaysQuests(today).map(d => ({
+    id: d.id, label: d.label, target: d.target, xp: d.xp,
+    prog: q.prog[d.id] || 0, done: !!q.done[d.id],
+  }));
+}
+
+function buildProfile(key, name) {
+  const today = quests.dayIndex(Date.now());
+  const prog = store.levelProgress(store.getXp(key));
+  const s = store.getStats(key);
+  const wins = store.getWins(key);
+  const st = store.getStreak(key);
+  return {
+    name: name || null,
+    level: prog.level, xp: { into: prog.into, need: prog.need },
+    stats: {
+      games: s.games, wins, winRate: s.games ? Math.round((wins / s.games) * 100) : 0,
+      kills: s.kills, deaths: s.deaths, kd: s.deaths ? +(s.kills / s.deaths).toFixed(2) : s.kills,
+      crates: s.crates, pickups: s.pickups,
+    },
+    streak: { count: st.count, best: st.best },
+    quests: buildQuests(key, today),
+  };
+}
+
+// advance one quest's progress; auto-grant XP + toast on completion. player may be undefined.
+function bumpQuest(room, player, id, n = 1) {
+  if (!player || !player.verified) return;
+  const key = player.key, today = quests.dayIndex(Date.now());
+  const def = quests.todaysQuests(today).find(d => d.id === id);
+  if (!def) return;                                   // quest not active today
+  const q = store.getQuestState(key, today);
+  if (q.done[id]) return;
+  q.prog[id] = (q.prog[id] || 0) + n;
+  if (q.prog[id] >= def.target) {
+    q.done[id] = true;
+    gainXp(room, key, def.xp);
+    if (player.ws && player.ws.readyState === 1)
+      player.ws.send(JSON.stringify({ t: "toast", kind: "quest", label: def.label, xp: def.xp }));
+  }
+  store.setQuestState(key, q);
+}
+
 function killDrop(room, pl) {
   const c = Math.round((pl.x - TILE / 2) / TILE), r = Math.round((pl.y - TILE / 2) / TILE);
   const bounty = Math.min(BOUNTY_MAX, (pl.streak || 0) * BOUNTY_STEP);
@@ -591,6 +638,7 @@ module.exports = {
   bal, setBal, genGrid, latticeGrid, generateRoom, connected, spawns, clearSpawns, monument,
   makeRoom, newRound, addPlayer, movePlayer, closeRing, dailySeed, roundAnte,
   placeBomb, detonate, explode, killDrop, tick, snapshot, store, auth,
+  buildProfile, buildQuests, bumpQuest,
 };
 
 // ---------- live server (only when run directly) ----------
