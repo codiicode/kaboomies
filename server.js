@@ -745,6 +745,13 @@ function syncBots(room){
   }
 }
 
+// send a message to every connected player in a room, skipping bots/closed sockets
+// (bots carry a stub ws with no send(), so an unguarded send would crash the loop)
+function broadcast(room, obj) {
+  const str = JSON.stringify(obj);
+  for (const p of room.players.values()) if (p.ws && p.ws.readyState === 1) p.ws.send(str);
+}
+
 module.exports = {
   TILE, FUSE, BLAST, START_BAL, DEATH_DROP, SUDDEN_AFTER, CLOSE_EVERY, POT_SHARE, MAX_HP, DMG_CORE, DMG_EDGE,
   KICK_STEP, INVULN_MS, BOUNTY_STEP, BOUNTY_MAX, MAPS, balances,
@@ -753,7 +760,7 @@ module.exports = {
   placeBomb, detonate, explode, settleDeath, tick, snapshot, store, auth,
   buildProfile, buildQuests, bumpQuest, characters,
   humanCount, isRanked, botTarget, botWalkable, botBlastCells, botDangerSet,
-  makeBot, syncBots,
+  makeBot, syncBots, broadcast,
 };
 
 // ---------- live server (exported so tests can start it on an ephemeral port) ----------
@@ -942,8 +949,7 @@ function startServer(port) {
       tick(room, TICK);
       if (room.phase === "roundover" && !room.roundTimer) {
         room.roundTimer = setTimeout(() => { room.roundTimer = null; newRound(room);
-          for (const p of room.players.values())
-            p.ws.send(JSON.stringify({ t: "round", grid: room.grid, win: "", seed: room.seed }));
+          broadcast(room, { t: "round", grid: room.grid, win: "", seed: room.seed });
         }, 4200);
       }
     }

@@ -53,3 +53,13 @@ test("botTarget: fill to 4 minus humans, never negative", () => {
   assert.strictEqual(game.botTarget(4),0);
   assert.strictEqual(game.botTarget(6),0);
 });
+
+test("broadcast skips bots (stub ws, no send) and never throws", () => {
+  let humanGot = null;
+  const human = { id: 1, ws: { readyState: 1, send: (s) => { humanGot = s; } } };
+  const bot = { id: 2, bot: true, ws: { readyState: 3 } }; // stub ws, no send()
+  const closed = { id: 3, ws: { readyState: 3, send: () => { throw new Error("should not send to closed"); } } };
+  const rm = { players: new Map([[1, human], [2, bot], [3, closed]]) };
+  assert.doesNotThrow(() => game.broadcast(rm, { t: "round", x: 1 }));
+  assert.strictEqual(humanGot, JSON.stringify({ t: "round", x: 1 })); // human received it
+});
