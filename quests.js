@@ -1,13 +1,15 @@
 /* Pure daily-quest + login-streak logic (no IO, unit-tested).
    Rewards are XP only; account level is prestige (no combat power). */
 
+// frozen so importing code can't mutate the shared pool (would corrupt todaysQuests)
 const QUEST_POOL = [
   { id: "win",     label: "Win a round",      target: 1,  xp: 150 },
   { id: "kills",   label: "Get 5 kills",      target: 5,  xp: 100 },
   { id: "crates",  label: "Break 25 crates",  target: 25, xp: 75  },
   { id: "pickups", label: "Grab 6 power-ups", target: 6,  xp: 75  },
   { id: "games",   label: "Play 4 rounds",    target: 4,  xp: 75  },
-];
+].map(Object.freeze);
+Object.freeze(QUEST_POOL);
 
 // contiguous UTC day number (unlike YYYYMMDD dailySeed) -> clean streak math
 function dayIndex(now) { return Math.floor(now / 86400000); }
