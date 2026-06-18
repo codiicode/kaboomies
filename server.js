@@ -29,6 +29,7 @@ const XP_KILL = 25, XP_WIN = 100, XP_CRATE = 2, XP_PICKUP = 5; // account-level 
 const store = require("./store");
 const auth = require("./auth");
 const quests = require("./quests");
+const characters = require("./characters");
 
 // Each map is its own room. One row taller than before.
 const MAPS = {
@@ -486,6 +487,7 @@ function buildProfile(key, name) {
     },
     streak: { count: st.count, best: st.best },
     quests: buildQuests(key, today),
+    characters: characters.unlockState({ games: s.games, kills: s.kills, wins, crates: s.crates, pickups: s.pickups, level: prog.level }),
   };
 }
 
@@ -646,7 +648,7 @@ module.exports = {
   bal, setBal, genGrid, latticeGrid, generateRoom, connected, spawns, clearSpawns, monument,
   makeRoom, newRound, addPlayer, movePlayer, closeRing, dailySeed, roundAnte,
   placeBomb, detonate, explode, killDrop, tick, snapshot, store, auth,
-  buildProfile, buildQuests, bumpQuest,
+  buildProfile, buildQuests, bumpQuest, characters,
 };
 
 // ---------- live server (exported so tests can start it on an ephemeral port) ----------
@@ -731,6 +733,10 @@ function startServer(port) {
       res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
       return res.end(JSON.stringify({ scores: store.topScores(20) }));
     }
+    if (url === "/characters") {
+      res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+      return res.end(JSON.stringify({ default: characters.DEFAULT_BASE, reqs: characters.CHARACTER_REQS }));
+    }
     const file = path.join(__dirname, "public", path.normalize(url).replace(/^(\.\.[/\\])+/, ""));
     fs.readFile(file, (err, data) => {
       if (err) { res.writeHead(404); return res.end("Not found"); }
@@ -758,10 +764,12 @@ function startServer(port) {
         room = roomFor(mapId, mode);
         const id = nextId++;
         const key = verified ? String(m.wallet).slice(0, 64) : ("guest:" + id);
+        const ustats = verified ? { ...store.getStats(key), level: store.levelFromXp(store.getXp(key)) } : {};
+        const allowedBase = characters.isUnlocked(m.base, ustats) ? m.base : characters.DEFAULT_BASE;
         player = {
           id, ws, key, wallet: verified ? m.wallet : null, verified, voice: false,
           name: (m.name || "Player").slice(0, 14),
-          base: m.base || "house", skin: m.skin || "#e8b07a", clothes: m.clothes || "#7d8aa0",
+          base: allowedBase, skin: m.skin || "#e8b07a", clothes: m.clothes || "#7d8aa0",
         };
         addPlayer(room, player);
         if (MAPS[room.mapId].wager && room.phase === "playing") roundAnte(room); // join the current pot

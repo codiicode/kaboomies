@@ -74,3 +74,27 @@ test("POST /profile returns a profile for a valid signature, 401 otherwise", asy
     await new Promise(r => server.close(r));
   }
 });
+
+test("buildProfile includes 8-character unlock state", () => {
+  const p = game.buildProfile("walletChars", "Cee");
+  assert.strictEqual(p.characters.length, 8);
+  assert.strictEqual(p.characters[0].base, "hero");
+  assert.strictEqual(p.characters[0].unlocked, true);
+});
+
+test("GET /characters returns the requirement defs (no auth)", async () => {
+  const server = game.startServer(0);
+  await new Promise(r => server.once("listening", r));
+  const port = server.address().port;
+  const body = await new Promise((resolve, reject) => {
+    const req = http.request({ host: "127.0.0.1", port, path: "/characters", method: "GET" },
+      (res) => { let b = ""; res.on("data", c => b += c); res.on("end", () => resolve({ status: res.statusCode, json: JSON.parse(b) })); });
+    req.on("error", reject); req.end();
+  });
+  try {
+    assert.strictEqual(body.status, 200);
+    assert.strictEqual(body.json.default, "hero");
+    assert.ok(Array.isArray(body.json.reqs) && body.json.reqs.length === 7);
+    assert.ok(body.json.reqs.every(r => r.base && r.label && typeof r.target === "number"));
+  } finally { await new Promise(r => server.close(r)); }
+});
