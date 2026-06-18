@@ -33,3 +33,41 @@ test("buildProfile K/D with zero deaths equals kills", () => {
   const p = game.buildProfile("walletQ", null);
   assert.strictEqual(p.stats.kd, 5);
 });
+
+const http = require("http");
+const nacl = require("tweetnacl");
+const bs58 = require("bs58").default || require("bs58");
+
+function signedBody() {
+  const kp = nacl.sign.keyPair();
+  const wallet = bs58.encode(Buffer.from(kp.publicKey));
+  const ts = Date.now();
+  const msg = new TextEncoder().encode(`KABOOMIES login\nwallet: ${wallet}\nts: ${ts}`);
+  const sig = Array.from(nacl.sign.detached(msg, kp.secretKey));
+  return { wallet, auth: { ts, sig } };
+}
+
+test("POST /profile returns a profile for a valid signature, 401 otherwise", async () => {
+  const server = game.startServer(0);                 // ephemeral port
+  await new Promise(r => server.once("listening", r));
+  const port = server.address().port;
+
+  const post = (obj) => new Promise((resolve) => {
+    const data = JSON.stringify(obj);
+    const req = http.request({ host: "127.0.0.1", port, path: "/profile", method: "POST",
+      headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data) } },
+      (res) => { let b = ""; res.on("data", c => b += c); res.on("end", () => resolve({ status: res.statusCode, body: b })); });
+    req.end(data);
+  });
+
+  const ok = await post(signedBody());
+  assert.strictEqual(ok.status, 200);
+  const prof = JSON.parse(ok.body);
+  assert.strictEqual(prof.quests.length, 3);
+  assert.ok(prof.level >= 1);
+
+  const bad = await post({ wallet: "nope", auth: { ts: Date.now(), sig: [1, 2, 3] } });
+  assert.strictEqual(bad.status, 401);
+
+  await new Promise(r => server.close(r));
+});

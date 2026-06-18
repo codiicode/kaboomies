@@ -649,14 +649,12 @@ module.exports = {
   buildProfile, buildQuests, bumpQuest,
 };
 
-// ---------- live server (only when run directly) ----------
-if (require.main === module) {
+// ---------- live server (exported so tests can start it on an ephemeral port) ----------
+function startServer(port) {
   const http = require("http");
   const fs = require("fs");
   const path = require("path");
   const { WebSocketServer } = require("ws");
-  const PORT = process.env.PORT || 3000;
-  store.init();
 
   const roomsByKey = new Map(); // "mode:mapId" -> [room, room, ...]
   function roomFor(mapId, mode) {
@@ -685,6 +683,26 @@ if (require.main === module) {
   const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css",
     ".png": "image/png", ".jpg": "image/jpeg", ".ico": "image/x-icon", ".json": "application/json" };
   const server = http.createServer((req, res) => {
+    if (req.method === "POST" && (req.url || "").split("?")[0] === "/profile") {
+      let body = "";
+      req.on("data", (c) => { body += c; if (body.length > 4096) req.destroy(); });
+      req.on("end", () => {
+        try {
+          const m = JSON.parse(body || "{}");
+          if (!(m.wallet && m.auth && auth.verify(m.wallet, m.auth.ts, m.auth.sig))) {
+            res.writeHead(401, { "Content-Type": "application/json" });
+            return res.end(JSON.stringify({ error: "unauthorized" }));
+          }
+          const key = String(m.wallet).slice(0, 64);
+          res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+          res.end(JSON.stringify(buildProfile(key, store.getName(key))));
+        } catch (e) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "bad_request" }));
+        }
+      });
+      return;
+    }
     let url = req.url.split("?")[0];
     if (url === "/") url = "/index.html";
     if (url === "/health") { res.writeHead(200); return res.end("ok"); }
@@ -794,7 +812,7 @@ if (require.main === module) {
     });
   });
 
-  setInterval(() => {
+  const tickTimer = setInterval(() => {
     for (const room of allRooms()) {
       tick(room, TICK);
       if (room.phase === "roundover" && !room.roundTimer) {
@@ -806,7 +824,7 @@ if (require.main === module) {
     }
   }, TICK);
 
-  setInterval(() => {
+  const snapTimer = setInterval(() => {
     for (const room of allRooms()) {
       const snap = snapshot(room);
       if (room.destroyed.length) { snap.d = room.destroyed.slice(); room.destroyed.length = 0; }
@@ -817,5 +835,19 @@ if (require.main === module) {
     }
   }, SNAP);
 
-  server.listen(PORT, () => console.log("KABOOMIES server on :" + PORT));
+  // don't let the game-loop timers keep the process alive on their own; the
+  // listening socket holds the event loop open while serving. this lets a test
+  // that calls server.close() exit cleanly instead of hanging on the intervals.
+  if (tickTimer.unref) tickTimer.unref();
+  if (snapTimer.unref) snapTimer.unref();
+
+  server.listen(port, () => console.log("KABOOMIES server on :" + port));
+  return server;
+}
+module.exports.startServer = startServer;
+
+// run only when executed directly (keeps the module importable for tests)
+if (require.main === module) {
+  store.init();
+  startServer(process.env.PORT || 3000);
 }
