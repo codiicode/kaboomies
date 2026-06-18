@@ -1308,7 +1308,9 @@ async function openProfile(){
   const auth=await signLogin();
   if(!auth||!walletAddr){ guest.style.display="block";
     ["profile-stats","profile-quests","profile-streak"].forEach(id=>$(id).innerHTML="");
-    $("profile-name").textContent="Guest"; $("profile-wallet").textContent=""; return; }
+    $("profile-name").textContent="Guest"; $("profile-wallet").textContent="";
+    $("profile-lvl").textContent="—"; $("profile-xp").textContent=""; $("profile-xpbar").style.width="0%";
+    const gav=$("profile-av"); if(gav){const g=gav.getContext("2d");g.clearRect(0,0,gav.width,gav.height);} return; }
   guest.style.display="none";
   let p; try{ const r=await fetch("/profile",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({wallet:walletAddr,auth})}); if(!r.ok)throw 0; p=await r.json(); }
