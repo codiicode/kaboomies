@@ -125,8 +125,9 @@ function getStats(key) {
   return { games: s.games || 0, kills: s.kills || 0, deaths: s.deaths || 0,
            crates: s.crates || 0, pickups: s.pickups || 0 };
 }
+const STAT_FIELDS = new Set(["games", "kills", "deaths", "crates", "pickups"]);
 function bumpStat(key, field, n = 1) {
-  if (!isWalletKey(key)) return;
+  if (!isWalletKey(key) || !STAT_FIELDS.has(field)) return; // allowlist: never persist stray fields
   const s = mem.stats[key] || (mem.stats[key] = {});
   s[field] = (s[field] || 0) + n;
   saveSoon();
@@ -143,12 +144,13 @@ function setStreak(key, st) {
   saveSoon();
 }
 
-// returns {day,prog,done}; resets (and persists) when the stored day != today.
+// returns a COPY of {day,prog,done}; resets (and persists) when the stored day != today.
+// callers mutate the copy then persist via setQuestState (so mem is never dirtied behind saveSoon).
 function getQuestState(key, today) {
   if (!isWalletKey(key)) return { day: today, prog: {}, done: {} };
   let q = mem.quests[key];
   if (!q || q.day !== today) { q = { day: today, prog: {}, done: {} }; mem.quests[key] = q; saveSoon(); }
-  return q;
+  return { day: q.day, prog: { ...q.prog }, done: { ...q.done } };
 }
 function setQuestState(key, q) {
   if (!isWalletKey(key)) return;
