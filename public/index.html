@@ -100,6 +100,18 @@
   .hatbtn .lockreq{display:block;font-family:var(--body);font-size:11px;color:var(--grey);text-transform:none;margin-top:3px;}
   .hatbtn.nudge{animation:nudge .4s;}
   @keyframes nudge{25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+  /* character skin tiles (owned / locked / shop) */
+  .skin-grid{display:flex;flex-wrap:wrap;gap:10px;}
+  .skin-tile{background:#fff;border:3px solid var(--ink);box-shadow:3px 3px 0 var(--ink);padding:8px 8px 7px;cursor:pointer;display:flex;flex-direction:column;align-items:center;width:108px;}
+  .skin-tile:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--ink);}
+  .skin-tile.sel{background:var(--ink);box-shadow:3px 3px 0 var(--red);}
+  .skin-tile.sel .skin-nm{color:#fff;}
+  .skin-tile.locked{opacity:.62;cursor:not-allowed;}
+  .skin-cv{width:62px;height:auto;image-rendering:auto;}
+  .skin-nm{font-family:var(--display);font-size:8px;line-height:1.35;margin-top:7px;text-align:center;}
+  .skin-req{font-family:var(--body);font-size:12px;color:var(--grey);text-transform:none;margin-top:4px;text-align:center;line-height:1.2;}
+  .skin-empty{font-family:var(--body);font-size:16px;text-transform:uppercase;color:var(--grey);}
+  .skin-tile.nudge{animation:nudge .4s;}
   .create-go{margin-top:16px;text-align:center;}
   .wallet-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
     background:#fff;border:3px solid var(--ink);box-shadow:5px 5px 0 var(--ink);padding:11px 13px 9px;margin-bottom:20px;
@@ -1189,23 +1201,39 @@ function buildCustomizer(){
       sw.appendChild(b);});
     g.appendChild(sw);box.appendChild(g);
   };
-  const cg=document.createElement("div");cg.className="opt-group";cg.innerHTML="<h4>Character</h4>";
-  const cb=document.createElement("div");cb.className="hatbtns";
   const selName=(BASES.find(x=>x.id===playerSkin.base)||{}).name||"YOU";
   const setPname=(n)=>{const pn=document.querySelector(".pname");if(pn)pn.textContent=(n||"YOU").toUpperCase();};
-  BASES.forEach(bs=>{const unlocked=!charUnlock||charUnlock.has(bs.id);
-    const b=document.createElement("button");
-    b.className="hatbtn"+(playerSkin.base===bs.id?" sel":"")+(unlocked?"":" locked");
+  // a character tile: a little avatar (always visible) + name; hovering shows it big in the preview
+  const skinTile=(bs,locked)=>{
+    const t=document.createElement("button");
+    t.className="skin-tile"+(playerSkin.base===bs.id?" sel":"")+(locked?" locked":"");
+    const cv=document.createElement("canvas");cv.width=84;cv.height=98;cv.className="skin-cv";
+    const nm=document.createElement("div");nm.className="skin-nm";nm.textContent=(locked?"🔒 ":"")+bs.name;
+    t.appendChild(cv);t.appendChild(nm);
     const pr=charProg[bs.id];
-    b.innerHTML=(unlocked?"":"🔒 ")+esc(bs.name)+((unlocked||!pr)?"":'<span class="lockreq">'+esc(pr.label)+" ("+Math.min(pr.prog,pr.target)+"/"+pr.target+")</span>");
-    // hover previews the character (locked or not) in the preview pane; leaving reverts
-    b.onmouseenter=()=>{clearTimeout(hoverTimer);hoverBase=bs.id;setPname(bs.name);};
-    b.onmouseleave=()=>{hoverBase=null;setPname(selName);};
-    if(unlocked) b.onclick=()=>{hoverBase=null;playerSkin.base=bs.id;Store.set("bb_skin",playerSkin);buildCustomizer();};
-    else b.onclick=()=>{b.classList.add("nudge");setTimeout(()=>b.classList.remove("nudge"),400);
-      hoverBase=bs.id;setPname(bs.name);clearTimeout(hoverTimer);hoverTimer=setTimeout(()=>{hoverBase=null;setPname(selName);},1800);}; // touch peek
-    cb.appendChild(b);});
-  cg.appendChild(cb);box.appendChild(cg);
+    if(locked&&pr){const rq=document.createElement("div");rq.className="skin-req";rq.textContent=pr.label+" ("+Math.min(pr.prog,pr.target)+"/"+pr.target+")";t.appendChild(rq);}
+    t.onmouseenter=()=>{clearTimeout(hoverTimer);hoverBase=bs.id;setPname(bs.name);};
+    t.onmouseleave=()=>{hoverBase=null;setPname(selName);};
+    if(!locked) t.onclick=()=>{hoverBase=null;playerSkin.base=bs.id;Store.set("bb_skin",playerSkin);buildCustomizer();};
+    else t.onclick=()=>{t.classList.add("nudge");setTimeout(()=>t.classList.remove("nudge"),400);hoverBase=bs.id;setPname(bs.name);clearTimeout(hoverTimer);hoverTimer=setTimeout(()=>{hoverBase=null;setPname(selName);},1800);};
+    const real=ctx;ctx=cv.getContext("2d");ctx.clearRect(0,0,cv.width,cv.height);
+    drawHero(cv.width/2,cv.height*0.70,64,{base:bs.id,skin:playerSkin.skin,clothes:playerSkin.clothes,house:playerSkin.house,roof:playerSkin.roof,hat:"none",hatCol:playerSkin.hatCol,face:1,phase:0,moving:false,sp:1,blink:0});
+    ctx=real;
+    return t;
+  };
+  const section=(title,bases,locked,note)=>{
+    const g=document.createElement("div");g.className="opt-group";g.innerHTML="<h4>"+title+"</h4>";
+    const grid=document.createElement("div");grid.className="skin-grid";
+    if(bases.length) bases.forEach(b=>grid.appendChild(skinTile(b,locked)));
+    else if(note){const n=document.createElement("div");n.className="skin-empty";n.textContent=note;grid.appendChild(n);}
+    g.appendChild(grid);box.appendChild(g);
+  };
+  const owned=BASES.filter(b=>!charUnlock||charUnlock.has(b.id));
+  const locked=BASES.filter(b=>charUnlock&&!charUnlock.has(b.id));
+  section("Skins you own",owned,false);
+  section("Locked skins",locked,true,"Keep playing to unlock more.");
+  { const g=document.createElement("div");g.className="opt-group";g.innerHTML='<h4>Shop · coming soon</h4>';
+    const n=document.createElement("div");n.className="skin-empty";n.textContent="Buyable skins land here soon.";g.appendChild(n);box.appendChild(g); }
   const pn=document.querySelector(".pname");if(pn){const cur=BASES.find(x=>x.id===playerSkin.base);pn.textContent=cur?cur.name.toUpperCase():"YOU";}
   if(IMG_BASES.includes(playerSkin.base)){
     const note=document.createElement("div");note.className="opt-group";
