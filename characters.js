@@ -11,7 +11,7 @@ const CHARACTER_REQS = [
   { base: "alon",   name: "ALON",           label: "Play 25 games",    stat: "games",  target: 25  },
   { base: "mitch",  name: "MITCH",          label: "Reach Level 5",    stat: "level",  target: 5   },
   { base: "wif",    name: "WIF",            label: "Get 100 kills",    stat: "kills",  target: 100 },
-  { base: "bull",   name: "The Black Bull", label: "Win 25 rounds",    stat: "wins",   target: 25  },
+  { base: "bull",   name: "Ansem The Black Bull", label: "Win 25 rounds", stat: "wins", target: 25  },
 ].map(Object.freeze);
 Object.freeze(CHARACTER_REQS);
 

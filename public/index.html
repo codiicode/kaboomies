@@ -1058,7 +1058,7 @@ const PAL={
   hatCol:["#ff5d73","#ffd23d","#54b8ff","#5ed66b","#a06bff","#2a2f45","#ffffff"],
 };
 const HATS=["none","cap","beanie","crown","party"];
-const BASES=[{id:"hero",name:"Hero"},{id:"house",name:"Chillhouse"},{id:"sahur",name:"Tung Sahur"},{id:"bull",name:"The Black Bull"},{id:"wif",name:"WIF"},{id:"popcat",name:"Popcat"},{id:"alon",name:"ALON"},{id:"mitch",name:"MITCH"}];
+const BASES=[{id:"hero",name:"Hero"},{id:"house",name:"Chillhouse"},{id:"sahur",name:"Tung Sahur"},{id:"bull",name:"Ansem The Black Bull"},{id:"wif",name:"WIF"},{id:"popcat",name:"Popcat"},{id:"alon",name:"ALON"},{id:"mitch",name:"MITCH"}];
 let hoverBase=null, hoverTimer=null; // hover/tap-to-preview a character (incl. locked ones)
 const IMG_BASES=[];
 let playerSkin=Store.get("bb_skin")||{base:"hero",skin:"#e8b07a",clothes:"#7d8aa0",house:"#e7cfa0",roof:"#c0563b",hat:"none",hatCol:"#ff5d73"};
@@ -1228,8 +1228,10 @@ function buildCustomizer(){
     else if(note){const n=document.createElement("div");n.className="skin-empty";n.textContent=note;grid.appendChild(n);}
     g.appendChild(grid);box.appendChild(g);
   };
-  const owned=BASES.filter(b=>!charUnlock||charUnlock.has(b.id));
-  const locked=BASES.filter(b=>charUnlock&&!charUnlock.has(b.id));
+  // until unlock data has loaded (charUnlock null) only Hero is owned, so locked
+  // skins read as locked immediately instead of flashing as owned then re-locking.
+  const owned=BASES.filter(b=>charUnlock?charUnlock.has(b.id):b.id==="hero");
+  const locked=BASES.filter(b=>charUnlock?!charUnlock.has(b.id):b.id!=="hero");
   section("Skins you own",owned,false);
   section("Locked skins",locked,true,"Keep playing to unlock more.");
   { const g=document.createElement("div");g.className="opt-group";g.innerHTML='<h4>Shop · coming soon</h4>';
