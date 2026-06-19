@@ -1046,7 +1046,8 @@ const PAL={
   hatCol:["#ff5d73","#ffd23d","#54b8ff","#5ed66b","#a06bff","#2a2f45","#ffffff"],
 };
 const HATS=["none","cap","beanie","crown","party"];
-const BASES=[{id:"house",name:"Chillhouse"},{id:"hero",name:"Hero"},{id:"sahur",name:"Tung Sahur"},{id:"bull",name:"The Black Bull"},{id:"wif",name:"WIF"},{id:"popcat",name:"Popcat"},{id:"alon",name:"ALON"},{id:"mitch",name:"MITCH"}];
+const BASES=[{id:"hero",name:"Hero"},{id:"house",name:"Chillhouse"},{id:"sahur",name:"Tung Sahur"},{id:"bull",name:"The Black Bull"},{id:"wif",name:"WIF"},{id:"popcat",name:"Popcat"},{id:"alon",name:"ALON"},{id:"mitch",name:"MITCH"}];
+let hoverBase=null, hoverTimer=null; // hover/tap-to-preview a character (incl. locked ones)
 const IMG_BASES=[];
 let playerSkin=Store.get("bb_skin")||{base:"hero",skin:"#e8b07a",clothes:"#7d8aa0",house:"#e7cfa0",roof:"#c0563b",hat:"none",hatCol:"#ff5d73"};
 playerSkin.hat="none"; // hats removed
@@ -1190,13 +1191,19 @@ function buildCustomizer(){
   };
   const cg=document.createElement("div");cg.className="opt-group";cg.innerHTML="<h4>Character</h4>";
   const cb=document.createElement("div");cb.className="hatbtns";
+  const selName=(BASES.find(x=>x.id===playerSkin.base)||{}).name||"YOU";
+  const setPname=(n)=>{const pn=document.querySelector(".pname");if(pn)pn.textContent=(n||"YOU").toUpperCase();};
   BASES.forEach(bs=>{const unlocked=!charUnlock||charUnlock.has(bs.id);
     const b=document.createElement("button");
     b.className="hatbtn"+(playerSkin.base===bs.id?" sel":"")+(unlocked?"":" locked");
     const pr=charProg[bs.id];
     b.innerHTML=(unlocked?"":"🔒 ")+esc(bs.name)+((unlocked||!pr)?"":'<span class="lockreq">'+esc(pr.label)+" ("+Math.min(pr.prog,pr.target)+"/"+pr.target+")</span>");
-    if(unlocked) b.onclick=()=>{playerSkin.base=bs.id;Store.set("bb_skin",playerSkin);buildCustomizer();};
-    else b.onclick=()=>{b.classList.add("nudge");setTimeout(()=>b.classList.remove("nudge"),400);};
+    // hover previews the character (locked or not) in the preview pane; leaving reverts
+    b.onmouseenter=()=>{clearTimeout(hoverTimer);hoverBase=bs.id;setPname(bs.name);};
+    b.onmouseleave=()=>{hoverBase=null;setPname(selName);};
+    if(unlocked) b.onclick=()=>{hoverBase=null;playerSkin.base=bs.id;Store.set("bb_skin",playerSkin);buildCustomizer();};
+    else b.onclick=()=>{b.classList.add("nudge");setTimeout(()=>b.classList.remove("nudge"),400);
+      hoverBase=bs.id;setPname(bs.name);clearTimeout(hoverTimer);hoverTimer=setTimeout(()=>{hoverBase=null;setPname(selName);},1800);}; // touch peek
     cb.appendChild(b);});
   cg.appendChild(cb);box.appendChild(cg);
   const pn=document.querySelector(".pname");if(pn){const cur=BASES.find(x=>x.id===playerSkin.base);pn.textContent=cur?cur.name.toUpperCase():"YOU";}
@@ -1214,7 +1221,7 @@ function buildCustomizer(){
 }
 let pvBlink=0,pvT=2,pvPhase=0;
 function renderPreview(){const pv=$("preview");if(!pv)return;const real=ctx;ctx=pv.getContext("2d");ctx.clearRect(0,0,pv.width,pv.height);
-  drawHero(pv.width/2,pv.height*0.66,118,{base:playerSkin.base,skin:playerSkin.skin,clothes:playerSkin.clothes,house:playerSkin.house,roof:playerSkin.roof,hat:playerSkin.hat,hatCol:playerSkin.hatCol,face:1,phase:pvPhase,moving:false,sp:1,blink:pvBlink>0?1:0});ctx=real;}
+  drawHero(pv.width/2,pv.height*0.66,118,{base:(hoverBase||playerSkin.base),skin:playerSkin.skin,clothes:playerSkin.clothes,house:playerSkin.house,roof:playerSkin.roof,hat:playerSkin.hat,hatCol:playerSkin.hatCol,face:1,phase:pvPhase,moving:false,sp:1,blink:pvBlink>0?1:0});ctx=real;}
 
 /* ---------- screens ---------- */
 let currentScreen="start";
