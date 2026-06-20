@@ -1544,9 +1544,15 @@ function connect(){
   ws.onclose=()=>{teardownVoice();if(!settled){settled=true;clearTimeout(fb);startLocal();return;}connected=false;setStatus("Disconnected — reload to rejoin.");};
 }
 function syncPlayers(){
-  const ids=new Set();
+  const ids=new Set(); const nowT=performance.now();
   for(const p of state.players){ids.add(p.id);let rp=rpos[p.id];
-    if(!rp){rp=rpos[p.id]={x:p.x,y:p.y,phase:Math.random()*6,moving:false,blink:0,blinkT:1+Math.random()*4};}
+    if(!rp){rp=rpos[p.id]={x:p.x,y:p.y,phase:Math.random()*6,moving:false,blink:0,blinkT:1+Math.random()*4,buf:[]};}
+    if(!rp.buf)rp.buf=[];
+    // timestamped snapshot buffer -> smooth constant-velocity interpolation for remote players
+    const lb=rp.buf[rp.buf.length-1];
+    if(lb&&Math.hypot(p.x-lb.x,p.y-lb.y)>TILE*2.5)rp.buf.length=0; // teleport/respawn -> drop history, no smearing
+    rp.buf.push({t:nowT,x:p.x,y:p.y});
+    while(rp.buf.length>2&&rp.buf[0].t<nowT-600)rp.buf.shift();
     rp.tx=p.x;rp.ty=p.y;rp.base=p.b;rp.skin=p.s;rp.clothes=p.cl;rp.alive=p.a;rp.name=p.n;rp.wins=p.w;rp.hp=p.hp;rp.mh=p.mh;rp.lvl=p.lvl;
     if(!local&&p.id===myId)predReconcile(p.x,p.y,p.sp,p.a);}
   for(const id in rpos)if(!ids.has(+id))delete rpos[id];
@@ -1768,6 +1774,20 @@ function predReconcile(sx,sy,sp,alive){ // record latest server pos; correction 
   if(!pred||!alive){pred={x:sx,y:sy,speed:sp||2.9};srvX=sx;srvY=sy;predMoving=false;return;}
   pred.speed=sp||pred.speed;srvX=sx;srvY=sy;
   if(Math.hypot(sx-pred.x,sy-pred.y)>TILE*1.6){pred.x=sx;pred.y=sy;}} // respawn/teleport -> snap
+/* ---------- remote-player interpolation (Valve/Source style) ----------
+   Render other players ~INTERP_DELAY ms in the past and linearly interpolate
+   between the two buffered snapshots that bracket that render time. Constant
+   velocity between snapshots = perfectly smooth, regardless of snapshot/frame rate. */
+const INTERP_DELAY=110; // ms render-behind (>~3 snapshots of 30/s buffer)
+function interpAt(buf,rt){
+  if(!buf||!buf.length)return null;
+  if(buf.length===1||rt<=buf[0].t)return {x:buf[0].x,y:buf[0].y};
+  const last=buf[buf.length-1];
+  if(rt>=last.t)return {x:last.x,y:last.y}; // buffer starved -> hold last (no jittery extrapolation)
+  for(let i=buf.length-1;i>0;i--){const a=buf[i-1],b=buf[i];
+    if(a.t<=rt&&rt<=b.t){const f=(rt-a.t)/((b.t-a.t)||1);return {x:a.x+(b.x-a.x)*f,y:a.y+(b.y-a.y)*f};}}
+  return {x:last.x,y:last.y};
+}
 window.addEventListener("keydown",e=>{const tag=(e.target&&e.target.tagName)||"";if(tag==="INPUT"||tag==="TEXTAREA")return;});
 window.addEventListener("keydown",e=>{if(!connected)return;const k=e.key.toLowerCase();
   if(k==="arrowup"||k==="w")setHeld("u",true);else if(k==="arrowdown"||k==="s")setHeld("d",true);
@@ -1860,10 +1880,13 @@ function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
     for(const b of state.bombs)drawBomb(b);
     const ents=Object.keys(rpos).map(id=>({id:+id,rp:rpos[id]}));
     if(!local&&pred)predTick(dt);
-    for(const e of ents){const rp=e.rp;
-      if(!local&&e.id===myId&&pred){rp.x=pred.x;rp.y=pred.y;rp.moving=predMoving;if(rp.moving)rp.phase+=dt*0.012;}
-      else{const ease=local?1:0.36;const ddx=(rp.tx-rp.x),ddy=(rp.ty-rp.y);
-      rp.x+=ddx*ease;rp.y+=ddy*ease;rp.moving=Math.hypot(ddx,ddy)>0.5;if(rp.moving)rp.phase+=dt*0.012;}
+    const rtime=now-INTERP_DELAY;
+    for(const e of ents){const rp=e.rp;let rx,ry;
+      if(!local&&e.id===myId&&pred){rx=pred.x;ry=pred.y;}            // you: client-side prediction (instant)
+      else if(!local){const ip=interpAt(rp.buf,rtime);rx=ip?ip.x:rp.tx;ry=ip?ip.y:rp.ty;} // others: buffered interpolation (smooth)
+      else{rx=rp.tx;ry=rp.ty;}                                        // local offline sim (already 60Hz)
+      const ddx=rx-rp.x,ddy=ry-rp.y;rp.x=rx;rp.y=ry;
+      rp.moving=Math.hypot(ddx,ddy)>0.12;if(rp.moving)rp.phase+=dt*0.012;
       rp.blinkT-=dt/1000;if(rp.blinkT<=0){rp.blink=0.16;rp.blinkT=1.5+Math.random()*4;}if(rp.blink>0)rp.blink-=dt/1000;}
     ents.sort((a,b)=>a.rp.y-b.rp.y);
     for(const e of ents){const rp=e.rp;if(!rp.alive)continue; // dead kaboomies vanish — only their $KABOOM stays on the ground
