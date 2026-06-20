@@ -1764,16 +1764,14 @@ function predStep(sc){ // advance movement by `sc` server-ticks worth (sc may be
   if(dy){const ny=pred.y+dy*sp;if(predCanBe(pred.x,ny,ign))pred.y=ny;else{const ce=Math.round((pred.x-TILE/2)/TILE)*TILE+TILE/2;const nx=pred.x+Math.sign(ce-pred.x)*Math.min(sp,Math.abs(ce-pred.x));if(Math.abs(ce-pred.x)>1&&predCanBe(nx,ny,ign)){pred.y=ny;pred.x=nx;}}}
 }
 function predTick(dt){if(!pred)return;const x0=pred.x,y0=pred.y;
-  predStep(Math.min(3.5,dt/PRED_TICK)); // continuous, frame-rate independent -> no quantization jitter
-  // smooth correction toward the server, applied per-frame, only on an axis you're NOT driving
-  const hx=held.l||held.r,hy=held.u||held.d,k=Math.min(1,dt*0.013);
-  if(!hx&&Math.abs(srvX-pred.x)>0.4)pred.x+=(srvX-pred.x)*k;
-  if(!hy&&Math.abs(srvY-pred.y)>0.4)pred.y+=(srvY-pred.y)*k;
+  predStep(Math.min(3.5,dt/PRED_TICK)); // PURE prediction while moving -> no corrections, nothing that can "jump"
   predMoving=Math.hypot(pred.x-x0,pred.y-y0)>0.12;}
-function predReconcile(sx,sy,sp,alive){ // record latest server pos; correction itself happens in predTick (smooth)
+function predReconcile(sx,sy,sp,alive){
   if(!pred||!alive){pred={x:sx,y:sy,speed:sp||2.9};srvX=sx;srvY=sy;predMoving=false;return;}
   pred.speed=sp||pred.speed;srvX=sx;srvY=sy;
-  if(Math.hypot(sx-pred.x,sy-pred.y)>TILE*1.6){pred.x=sx;pred.y=sy;}} // respawn/teleport -> snap
+  if(Math.hypot(sx-pred.x,sy-pred.y)>TILE*1.6){pred.x=sx;pred.y=sy;return;} // gross desync (respawn/teleport) -> snap (rself smooths it)
+  // converge to the server ONLY when fully idle — never tug a moving axis, so direction changes can't jump backward
+  if(!(held.l||held.r||held.u||held.d)){pred.x+=(sx-pred.x)*0.12;pred.y+=(sy-pred.y)*0.12;}}
 /* ---------- remote-player interpolation (Valve/Source style) ----------
    Render other players ~INTERP_DELAY ms in the past and linearly interpolate
    between the two buffered snapshots that bracket that render time. Constant
