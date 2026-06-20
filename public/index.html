@@ -1735,11 +1735,13 @@ function setHeld(k,v){if(held[k]!==v){held[k]=v;sendInput();}}
 function bomb(){sfx("place");if(local){if(meLP&&meLP.alive&&phaseL==="playing")placeBombL(meLP);return;}if(ws&&ws.readyState===1)ws.send(JSON.stringify({t:"bomb"}));}
 function detonate(){if(local){if(meLP)detonateL(meLP);return;}if(ws&&ws.readyState===1)ws.send(JSON.stringify({t:"det"}));}
 /* ---------- client-side prediction: YOUR kaboomie moves with 0 delay ----------
-   Mirrors the server movePlayer exactly (same collision + corner-slide), runs at
-   the server's 60Hz tick, and only hard-snaps on a real desync (respawn/teleport).
-   Steady running is NEVER pulled back: we converge to the server only on an axis
-   you're not actively driving, so there's no rubber-banding. */
-let pred=null, predMoving=false, predAccum=0; const PRED_TICK=1000/60;
+   Mirrors the server movePlayer (same collision + corner-slide) but advances a
+   FRAME-RATE-INDEPENDENT amount each frame (proportional to real frame time), so
+   motion is perfectly smooth at any refresh rate — no per-tick quantization jitter.
+   Correction toward the server is applied smoothly every frame and ONLY on an axis
+   you're not actively driving, so steady running is never pulled back (no rubber-
+   banding); a real desync (respawn/teleport) hard-snaps. */
+let pred=null, predMoving=false, srvX=0, srvY=0; const PRED_TICK=1000/60;
 function predOverlap(x,y,b){const PHB=TILE*0.34,tx0=b.c*TILE,tx1=tx0+TILE,ty0=b.r*TILE,ty1=ty0+TILE;
   return x+PHB>tx0+2&&x-PHB<tx1-2&&y+PHB>ty0+2&&y-PHB<ty1-2;}
 function predCanBe(px,py,ign){const PHB=TILE*0.34,x0=px-PHB,x1=px+PHB,y0=py-PHB,y1=py+PHB;
@@ -1748,24 +1750,24 @@ function predCanBe(px,py,ign){const PHB=TILE*0.34,x0=px-PHB,x1=px+PHB,y0=py-PHB,
   for(const b of state.bombs){if(ign&&ign.has(b))continue;const tx0=b.c*TILE,tx1=tx0+TILE,ty0=b.r*TILE,ty1=ty0+TILE;
     if(x1>tx0+2&&x0<tx1-2&&y1>ty0+2&&y0<ty1-2)return false;}
   return true;}
-function predOneTick(){ // one server tick of movement (exact mirror of server.movePlayer)
+function predStep(sc){ // advance movement by `sc` server-ticks worth (sc may be fractional -> smooth at any FPS)
   const ign=new Set();for(const b of state.bombs)if(predOverlap(pred.x,pred.y,b))ign.add(b); // pass through a bomb you're standing on
   let dx=(held.r?1:0)-(held.l?1:0),dy=(held.d?1:0)-(held.u?1:0);
-  if(dx&&dy){dx*=0.7071;dy*=0.7071;}const sp=pred.speed;
+  if(dx&&dy){dx*=0.7071;dy*=0.7071;}const sp=pred.speed*sc;
   if(dx){const nx=pred.x+dx*sp;if(predCanBe(nx,pred.y,ign))pred.x=nx;else{const ce=Math.round((pred.y-TILE/2)/TILE)*TILE+TILE/2;const ny=pred.y+Math.sign(ce-pred.y)*Math.min(sp,Math.abs(ce-pred.y));if(Math.abs(ce-pred.y)>1&&predCanBe(nx,ny,ign)){pred.x=nx;pred.y=ny;}}}
   if(dy){const ny=pred.y+dy*sp;if(predCanBe(pred.x,ny,ign))pred.y=ny;else{const ce=Math.round((pred.x-TILE/2)/TILE)*TILE+TILE/2;const nx=pred.x+Math.sign(ce-pred.x)*Math.min(sp,Math.abs(ce-pred.x));if(Math.abs(ce-pred.x)>1&&predCanBe(nx,ny,ign)){pred.y=ny;pred.x=nx;}}}
 }
-function predTick(dt){if(!pred)return;const x0=pred.x,y0=pred.y;predAccum+=dt;let n=0;
-  while(predAccum>=PRED_TICK&&n<6){predOneTick();predAccum-=PRED_TICK;n++;}
-  if(predAccum>PRED_TICK*4)predAccum=0; // drop backlog after a tab-away so we don't fast-forward
-  predMoving=Math.hypot(pred.x-x0,pred.y-y0)>0.15;}
-function predReconcile(sx,sy,sp,alive){
-  if(!pred||!alive){pred={x:sx,y:sy,speed:sp||2.9};predAccum=0;predMoving=false;return;}
-  pred.speed=sp||pred.speed;
-  if(Math.hypot(sx-pred.x,sy-pred.y)>TILE*1.6){pred.x=sx;pred.y=sy;predAccum=0;return;} // respawn/teleport -> snap
-  const hx=held.l||held.r,hy=held.u||held.d; // only correct an axis you're not driving (no backward pull while running)
-  if(!hx&&Math.abs(sx-pred.x)>1.5)pred.x+=(sx-pred.x)*0.2;
-  if(!hy&&Math.abs(sy-pred.y)>1.5)pred.y+=(sy-pred.y)*0.2;}
+function predTick(dt){if(!pred)return;const x0=pred.x,y0=pred.y;
+  predStep(Math.min(3.5,dt/PRED_TICK)); // continuous, frame-rate independent -> no quantization jitter
+  // smooth correction toward the server, applied per-frame, only on an axis you're NOT driving
+  const hx=held.l||held.r,hy=held.u||held.d,k=Math.min(1,dt*0.013);
+  if(!hx&&Math.abs(srvX-pred.x)>0.4)pred.x+=(srvX-pred.x)*k;
+  if(!hy&&Math.abs(srvY-pred.y)>0.4)pred.y+=(srvY-pred.y)*k;
+  predMoving=Math.hypot(pred.x-x0,pred.y-y0)>0.12;}
+function predReconcile(sx,sy,sp,alive){ // record latest server pos; correction itself happens in predTick (smooth)
+  if(!pred||!alive){pred={x:sx,y:sy,speed:sp||2.9};srvX=sx;srvY=sy;predMoving=false;return;}
+  pred.speed=sp||pred.speed;srvX=sx;srvY=sy;
+  if(Math.hypot(sx-pred.x,sy-pred.y)>TILE*1.6){pred.x=sx;pred.y=sy;}} // respawn/teleport -> snap
 window.addEventListener("keydown",e=>{const tag=(e.target&&e.target.tagName)||"";if(tag==="INPUT"||tag==="TEXTAREA")return;});
 window.addEventListener("keydown",e=>{if(!connected)return;const k=e.key.toLowerCase();
   if(k==="arrowup"||k==="w")setHeld("u",true);else if(k==="arrowdown"||k==="s")setHeld("d",true);
