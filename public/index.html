@@ -1514,7 +1514,7 @@ function connect(){
   const fb=setTimeout(()=>{if(!settled){settled=true;try{ws.close();}catch(_){}startLocal();}},1600);
   ws.onopen=()=>{settled=true;clearTimeout(fb);const name=($("nameInp").value||"Player").slice(0,14);ws.send(JSON.stringify({t:"join",name,base:playerSkin.base,skin:playerSkin.skin,clothes:playerSkin.clothes,map:selMap,mode:selMode,wallet:walletAddr,auth:pendingAuth}));};
   ws.onmessage=(ev)=>{const m=JSON.parse(ev.data);
-    if(m.t==="init"){myId=m.id;COLS=m.COLS;ROWS=m.ROWS;TILE=m.TILE;W=m.W;H=m.H;FUSE=m.fuse;grid=m.grid;curMap=MAPS.find(x=>x.id===m.map)||MAPS[0];if(typeof m.bal==="number"){myBal=m.bal;prevBalForSfx=m.bal;}myPot=m.pot||0;verifiedWallet=!!m.verified;myWager=!!m.wager;myAnte=m.ante||0;
+    if(m.t==="init"){myId=m.id;pred=null;COLS=m.COLS;ROWS=m.ROWS;TILE=m.TILE;W=m.W;H=m.H;FUSE=m.fuse;grid=m.grid;curMap=MAPS.find(x=>x.id===m.map)||MAPS[0];if(typeof m.bal==="number"){myBal=m.bal;prevBalForSfx=m.bal;}myPot=m.pot||0;verifiedWallet=!!m.verified;myWager=!!m.wager;myAnte=m.ante||0;
       if(typeof m.seed==="number"&&curMap.style!=="garden"){curPalette=paletteFromSeed(m.seed);curTheme=themeFromSeed(m.seed);}else{curPalette=null;curTheme=THEMES.classic;}updateArenaName();suddenOn=false;killfeed=[];bubbles={};snowFlakes=[];genCosmetics();
       CV.width=W;CV.height=H;connected=true;showScreen("game");
       const mb=$("mic-btn");if(mb)mb.style.display="";micState("on");
@@ -1547,7 +1547,8 @@ function syncPlayers(){
   const ids=new Set();
   for(const p of state.players){ids.add(p.id);let rp=rpos[p.id];
     if(!rp){rp=rpos[p.id]={x:p.x,y:p.y,phase:Math.random()*6,moving:false,blink:0,blinkT:1+Math.random()*4};}
-    rp.tx=p.x;rp.ty=p.y;rp.base=p.b;rp.skin=p.s;rp.clothes=p.cl;rp.alive=p.a;rp.name=p.n;rp.wins=p.w;rp.hp=p.hp;rp.mh=p.mh;rp.lvl=p.lvl;}
+    rp.tx=p.x;rp.ty=p.y;rp.base=p.b;rp.skin=p.s;rp.clothes=p.cl;rp.alive=p.a;rp.name=p.n;rp.wins=p.w;rp.hp=p.hp;rp.mh=p.mh;rp.lvl=p.lvl;
+    if(!local&&p.id===myId)predReconcile(p.x,p.y,p.sp,p.a);}
   for(const id in rpos)if(!ids.has(+id))delete rpos[id];
 }
 
@@ -1733,6 +1734,38 @@ function sendInput(){if(ws&&ws.readyState===1)ws.send(JSON.stringify({t:"in",...
 function setHeld(k,v){if(held[k]!==v){held[k]=v;sendInput();}}
 function bomb(){sfx("place");if(local){if(meLP&&meLP.alive&&phaseL==="playing")placeBombL(meLP);return;}if(ws&&ws.readyState===1)ws.send(JSON.stringify({t:"bomb"}));}
 function detonate(){if(local){if(meLP)detonateL(meLP);return;}if(ws&&ws.readyState===1)ws.send(JSON.stringify({t:"det"}));}
+/* ---------- client-side prediction: YOUR kaboomie moves with 0 delay ----------
+   Mirrors the server movePlayer exactly (same collision + corner-slide), runs at
+   the server's 60Hz tick, and only hard-snaps on a real desync (respawn/teleport).
+   Steady running is NEVER pulled back: we converge to the server only on an axis
+   you're not actively driving, so there's no rubber-banding. */
+let pred=null, predMoving=false, predAccum=0; const PRED_TICK=1000/60;
+function predOverlap(x,y,b){const PHB=TILE*0.34,tx0=b.c*TILE,tx1=tx0+TILE,ty0=b.r*TILE,ty1=ty0+TILE;
+  return x+PHB>tx0+2&&x-PHB<tx1-2&&y+PHB>ty0+2&&y-PHB<ty1-2;}
+function predCanBe(px,py,ign){const PHB=TILE*0.34,x0=px-PHB,x1=px+PHB,y0=py-PHB,y1=py+PHB;
+  const c0=Math.floor(x0/TILE),c1=Math.floor(x1/TILE),r0=Math.floor(y0/TILE),r1=Math.floor(y1/TILE);
+  for(let r=r0;r<=r1;r++)for(let c=c0;c<=c1;c++){if(c<0||r<0||c>=COLS||r>=ROWS)return false;const t=grid[r][c];if(t===1||t===2)return false;}
+  for(const b of state.bombs){if(ign&&ign.has(b))continue;const tx0=b.c*TILE,tx1=tx0+TILE,ty0=b.r*TILE,ty1=ty0+TILE;
+    if(x1>tx0+2&&x0<tx1-2&&y1>ty0+2&&y0<ty1-2)return false;}
+  return true;}
+function predOneTick(){ // one server tick of movement (exact mirror of server.movePlayer)
+  const ign=new Set();for(const b of state.bombs)if(predOverlap(pred.x,pred.y,b))ign.add(b); // pass through a bomb you're standing on
+  let dx=(held.r?1:0)-(held.l?1:0),dy=(held.d?1:0)-(held.u?1:0);
+  if(dx&&dy){dx*=0.7071;dy*=0.7071;}const sp=pred.speed;
+  if(dx){const nx=pred.x+dx*sp;if(predCanBe(nx,pred.y,ign))pred.x=nx;else{const ce=Math.round((pred.y-TILE/2)/TILE)*TILE+TILE/2;const ny=pred.y+Math.sign(ce-pred.y)*Math.min(sp,Math.abs(ce-pred.y));if(Math.abs(ce-pred.y)>1&&predCanBe(nx,ny,ign)){pred.x=nx;pred.y=ny;}}}
+  if(dy){const ny=pred.y+dy*sp;if(predCanBe(pred.x,ny,ign))pred.y=ny;else{const ce=Math.round((pred.x-TILE/2)/TILE)*TILE+TILE/2;const nx=pred.x+Math.sign(ce-pred.x)*Math.min(sp,Math.abs(ce-pred.x));if(Math.abs(ce-pred.x)>1&&predCanBe(nx,ny,ign)){pred.y=ny;pred.x=nx;}}}
+}
+function predTick(dt){if(!pred)return;const x0=pred.x,y0=pred.y;predAccum+=dt;let n=0;
+  while(predAccum>=PRED_TICK&&n<6){predOneTick();predAccum-=PRED_TICK;n++;}
+  if(predAccum>PRED_TICK*4)predAccum=0; // drop backlog after a tab-away so we don't fast-forward
+  predMoving=Math.hypot(pred.x-x0,pred.y-y0)>0.15;}
+function predReconcile(sx,sy,sp,alive){
+  if(!pred||!alive){pred={x:sx,y:sy,speed:sp||2.9};predAccum=0;predMoving=false;return;}
+  pred.speed=sp||pred.speed;
+  if(Math.hypot(sx-pred.x,sy-pred.y)>TILE*1.6){pred.x=sx;pred.y=sy;predAccum=0;return;} // respawn/teleport -> snap
+  const hx=held.l||held.r,hy=held.u||held.d; // only correct an axis you're not driving (no backward pull while running)
+  if(!hx&&Math.abs(sx-pred.x)>1.5)pred.x+=(sx-pred.x)*0.2;
+  if(!hy&&Math.abs(sy-pred.y)>1.5)pred.y+=(sy-pred.y)*0.2;}
 window.addEventListener("keydown",e=>{const tag=(e.target&&e.target.tagName)||"";if(tag==="INPUT"||tag==="TEXTAREA")return;});
 window.addEventListener("keydown",e=>{if(!connected)return;const k=e.key.toLowerCase();
   if(k==="arrowup"||k==="w")setHeld("u",true);else if(k==="arrowdown"||k==="s")setHeld("d",true);
@@ -1824,8 +1857,11 @@ function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
     for(const d of (state.drops||[]))drawDrop(d);
     for(const b of state.bombs)drawBomb(b);
     const ents=Object.keys(rpos).map(id=>({id:+id,rp:rpos[id]}));
-    for(const e of ents){const rp=e.rp;const ease=local?1:(e.id===myId?0.72:0.36);const ddx=(rp.tx-rp.x),ddy=(rp.ty-rp.y);
-      rp.x+=ddx*ease;rp.y+=ddy*ease;rp.moving=Math.hypot(ddx,ddy)>0.5;if(rp.moving)rp.phase+=dt*0.012;
+    if(!local&&pred)predTick(dt);
+    for(const e of ents){const rp=e.rp;
+      if(!local&&e.id===myId&&pred){rp.x=pred.x;rp.y=pred.y;rp.moving=predMoving;if(rp.moving)rp.phase+=dt*0.012;}
+      else{const ease=local?1:0.36;const ddx=(rp.tx-rp.x),ddy=(rp.ty-rp.y);
+      rp.x+=ddx*ease;rp.y+=ddy*ease;rp.moving=Math.hypot(ddx,ddy)>0.5;if(rp.moving)rp.phase+=dt*0.012;}
       rp.blinkT-=dt/1000;if(rp.blinkT<=0){rp.blink=0.16;rp.blinkT=1.5+Math.random()*4;}if(rp.blink>0)rp.blink-=dt/1000;}
     ents.sort((a,b)=>a.rp.y-b.rp.y);
     for(const e of ents){const rp=e.rp;if(!rp.alive)continue; // dead kaboomies vanish — only their $KABOOM stays on the ground
