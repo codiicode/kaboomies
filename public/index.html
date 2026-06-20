@@ -1824,7 +1824,7 @@ function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
     for(const d of (state.drops||[]))drawDrop(d);
     for(const b of state.bombs)drawBomb(b);
     const ents=Object.keys(rpos).map(id=>({id:+id,rp:rpos[id]}));
-    for(const e of ents){const rp=e.rp;const ease=local?1:(e.id===myId?0.5:0.32);const ddx=(rp.tx-rp.x),ddy=(rp.ty-rp.y);
+    for(const e of ents){const rp=e.rp;const ease=local?1:(e.id===myId?0.72:0.36);const ddx=(rp.tx-rp.x),ddy=(rp.ty-rp.y);
       rp.x+=ddx*ease;rp.y+=ddy*ease;rp.moving=Math.hypot(ddx,ddy)>0.5;if(rp.moving)rp.phase+=dt*0.012;
       rp.blinkT-=dt/1000;if(rp.blinkT<=0){rp.blink=0.16;rp.blinkT=1.5+Math.random()*4;}if(rp.blink>0)rp.blink-=dt/1000;}
     ents.sort((a,b)=>a.rp.y-b.rp.y);
