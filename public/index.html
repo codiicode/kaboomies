@@ -1547,7 +1547,7 @@ function syncPlayers(){
   const ids=new Set();
   for(const p of state.players){ids.add(p.id);let rp=rpos[p.id];
     if(!rp){rp=rpos[p.id]={x:p.x,y:p.y,phase:Math.random()*6,moving:false,blink:0,blinkT:1+Math.random()*4};}
-    rp.tx=p.x;rp.ty=p.y;rp.base=p.b;rp.skin=p.s;rp.clothes=p.cl;rp.alive=p.a;rp.name=p.n;rp.wins=p.w;rp.hp=p.hp;rp.mh=p.mh;rp.lvl=p.lvl;}
+    rp.tx=p.x;rp.ty=p.y;rp.base=p.b;rp.skin=p.s;rp.clothes=p.cl;rp.alive=p.a;rp.name=p.n;rp.wins=p.w;rp.hp=p.hp;rp.mh=p.mh;rp.lvl=p.lvl;rp.sp=p.sp;}
   for(const id in rpos)if(!ids.has(+id))delete rpos[id];
 }
 
@@ -1729,6 +1729,16 @@ function stepLocal(dt){stepAcc+=dt;let n=0;while(stepAcc>=STEP_MS&&n<5){tickL(ST
 
 
 const held={u:false,d:false,l:false,r:false};
+const _emptySet=new Set();
+// client-side prediction for YOUR OWN kaboomie: move the render position straight
+// from your input (same math + collision as the server's movePlayer) so running
+// feels instant instead of waiting a network round-trip. sp = px this frame.
+function predictMove(rp,sp){
+  let dx=(held.r?1:0)-(held.l?1:0),dy=(held.d?1:0)-(held.u?1:0);
+  if(dx&&dy){dx*=0.7071;dy*=0.7071;}const pl={ignore:_emptySet};
+  if(dx){const nx=rp.x+dx*sp;if(canBeL(nx,rp.y,pl))rp.x=nx;else{const ce=Math.round((rp.y-TILE/2)/TILE)*TILE+TILE/2;const ny=rp.y+Math.sign(ce-rp.y)*Math.min(sp,Math.abs(ce-rp.y));if(Math.abs(ce-rp.y)>1&&canBeL(nx,ny,pl)){rp.x=nx;rp.y=ny;}}}
+  if(dy){const ny=rp.y+dy*sp;if(canBeL(rp.x,ny,pl))rp.y=ny;else{const ce=Math.round((rp.x-TILE/2)/TILE)*TILE+TILE/2;const nx=rp.x+Math.sign(ce-rp.x)*Math.min(sp,Math.abs(ce-rp.x));if(Math.abs(ce-rp.x)>1&&canBeL(nx,ny,pl)){rp.y=ny;rp.x=nx;}}}
+}
 function sendInput(){if(ws&&ws.readyState===1)ws.send(JSON.stringify({t:"in",...held}));}
 function setHeld(k,v){if(held[k]!==v){held[k]=v;sendInput();}}
 function bomb(){sfx("place");if(local){if(meLP&&meLP.alive&&phaseL==="playing")placeBombL(meLP);return;}if(ws&&ws.readyState===1)ws.send(JSON.stringify({t:"bomb"}));}
@@ -1824,8 +1834,19 @@ function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
     for(const d of (state.drops||[]))drawDrop(d);
     for(const b of state.bombs)drawBomb(b);
     const ents=Object.keys(rpos).map(id=>({id:+id,rp:rpos[id]}));
-    for(const e of ents){const rp=e.rp;const ease=local?1:(e.id===myId?0.5:0.32);const ddx=(rp.tx-rp.x),ddy=(rp.ty-rp.y);
-      rp.x+=ddx*ease;rp.y+=ddy*ease;rp.moving=Math.hypot(ddx,ddy)>0.5;if(rp.moving)rp.phase+=dt*0.012;
+    for(const e of ents){const rp=e.rp;
+      if(!local&&e.id===myId&&rp.alive&&state.ph==="playing"){
+        // 0-delay self movement: predict locally from input; only correct on real divergence
+        const moving=!!(held.l||held.r||held.u||held.d);
+        if(moving)predictMove(rp,(rp.sp||2.9)*(dt/STEP_MS));
+        const drift=Math.hypot(rp.tx-rp.x,rp.ty-rp.y);
+        if(!moving){rp.x+=(rp.tx-rp.x)*0.3;rp.y+=(rp.ty-rp.y)*0.3;} // settle exactly on the server pos when idle
+        else if(drift>TILE*0.9){rp.x=rp.tx;rp.y=rp.ty;}            // snap on a real desync (blocked / knockback)
+        rp.moving=moving;if(moving)rp.phase+=dt*0.012;
+      } else {
+        const ease=local?1:0.32;const ddx=(rp.tx-rp.x),ddy=(rp.ty-rp.y);
+        rp.x+=ddx*ease;rp.y+=ddy*ease;rp.moving=Math.hypot(ddx,ddy)>0.5;if(rp.moving)rp.phase+=dt*0.012;
+      }
       rp.blinkT-=dt/1000;if(rp.blinkT<=0){rp.blink=0.16;rp.blinkT=1.5+Math.random()*4;}if(rp.blink>0)rp.blink-=dt/1000;}
     ents.sort((a,b)=>a.rp.y-b.rp.y);
     for(const e of ents){const rp=e.rp;if(!rp.alive)continue; // dead kaboomies vanish — only their $KABOOM stays on the ground
