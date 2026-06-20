@@ -638,8 +638,7 @@ function snapshot(room) {
     players.push({ id: p.id, n: p.name, x: Math.round(p.x), y: Math.round(p.y),
       b: p.base, s: p.skin, cl: p.clothes, a: p.alive, w: p.wins, bal: bal(p.key, room.cur),
       hp: Math.max(0, Math.round(p.hp)), mh: p.maxHp || MAX_HP, lvl: store.levelFromXp(store.getXp(p.key)),
-      kk: !!p.kick, rm: !!p.remote, pi: !!p.pierce, sh: p.shield || 0, iv: p.vuln > 0 ? 1 : 0, st: p.streak || 0,
-      sp: Math.round((p.speed || SPEED_BASE) * 100) / 100 });
+      kk: !!p.kick, rm: !!p.remote, pi: !!p.pierce, sh: p.shield || 0, iv: p.vuln > 0 ? 1 : 0, st: p.streak || 0 });
   return {
     t: "s",
     players,
