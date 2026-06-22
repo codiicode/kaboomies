@@ -102,14 +102,14 @@
   @keyframes nudge{25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
   /* character skin tiles (owned / locked / shop) */
   .skin-grid{display:flex;flex-wrap:wrap;gap:6px;}
-  .skin-tile{background:#fff;border:3px solid var(--ink);box-shadow:3px 3px 0 var(--ink);padding:4px 4px 5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;width:74px;}
+  .skin-tile{background:#fff;border:3px solid var(--ink);box-shadow:3px 3px 0 var(--ink);padding:5px 5px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;width:108px;}
   .skin-tile:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--ink);}
   .skin-tile.sel{background:#fff;border-color:var(--red);box-shadow:4px 4px 0 var(--red);}
   .skin-tile.sel .skin-nm{color:var(--red);}
   .skin-tile.locked{opacity:.62;cursor:not-allowed;}
   .skin-cv{width:44px;height:auto;image-rendering:auto;}
-  .skin-nm{font-family:var(--display);font-size:7px;line-height:1.25;margin-top:4px;text-align:center;width:100%;height:20px;display:flex;align-items:center;justify-content:center;overflow:hidden;}
-  .skin-req{font-family:var(--body);font-size:11px;color:var(--grey);text-transform:none;margin-top:1px;text-align:center;line-height:1.1;width:100%;height:26px;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+  .skin-nm{font-family:var(--display);font-size:7px;line-height:1.4;margin-top:5px;text-align:center;width:100%;height:24px;display:flex;align-items:center;justify-content:center;}
+  .skin-req{font-family:var(--body);font-size:11px;color:var(--grey);text-transform:none;margin-top:2px;text-align:center;line-height:1.15;width:100%;height:28px;display:flex;align-items:center;justify-content:center;}
   .skin-empty{font-family:var(--body);font-size:15px;text-transform:uppercase;color:var(--grey);}
   .skin-tile.nudge{animation:nudge .4s;}
   .create-go{margin-top:16px;text-align:center;}
@@ -1210,7 +1210,7 @@ function buildCustomizer(){
     const nm=document.createElement("div");nm.className="skin-nm";nm.textContent=(locked?"🔒 ":"")+bs.name;
     t.appendChild(cv);t.appendChild(nm);
     const pr=charProg[bs.id];
-    if(locked&&pr){const rq=document.createElement("div");rq.className="skin-req";rq.textContent=pr.label+" ("+Math.min(pr.prog,pr.target)+"/"+pr.target+")";t.appendChild(rq);}
+    const rq=document.createElement("div");rq.className="skin-req";rq.textContent=(locked&&pr)?pr.label+" ("+Math.min(pr.prog,pr.target)+"/"+pr.target+")":"";t.appendChild(rq);
     t.onmouseenter=()=>{clearTimeout(hoverTimer);hoverBase=bs.id;setPname(bs.name);};
     t.onmouseleave=()=>{hoverBase=null;setPname(selName);};
     if(!locked) t.onclick=()=>{hoverBase=null;playerSkin.base=bs.id;Store.set("bb_skin",playerSkin);buildCustomizer();};
