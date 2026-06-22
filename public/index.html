@@ -1514,7 +1514,7 @@ function connect(){
   const fb=setTimeout(()=>{if(!settled){settled=true;try{ws.close();}catch(_){}startLocal();}},1600);
   ws.onopen=()=>{settled=true;clearTimeout(fb);const name=($("nameInp").value||"Player").slice(0,14);ws.send(JSON.stringify({t:"join",name,base:playerSkin.base,skin:playerSkin.skin,clothes:playerSkin.clothes,map:selMap,mode:selMode,wallet:walletAddr,auth:pendingAuth}));};
   ws.onmessage=(ev)=>{const m=JSON.parse(ev.data);
-    if(m.t==="init"){myId=m.id;pred=null;rself=null;COLS=m.COLS;ROWS=m.ROWS;TILE=m.TILE;W=m.W;H=m.H;FUSE=m.fuse;grid=m.grid;curMap=MAPS.find(x=>x.id===m.map)||MAPS[0];if(typeof m.bal==="number"){myBal=m.bal;prevBalForSfx=m.bal;}myPot=m.pot||0;verifiedWallet=!!m.verified;myWager=!!m.wager;myAnte=m.ante||0;
+    if(m.t==="init"){myId=m.id;pred=null;rself=null;predBombs=[];predPicked.clear();COLS=m.COLS;ROWS=m.ROWS;TILE=m.TILE;W=m.W;H=m.H;FUSE=m.fuse;grid=m.grid;curMap=MAPS.find(x=>x.id===m.map)||MAPS[0];if(typeof m.bal==="number"){myBal=m.bal;prevBalForSfx=m.bal;}myPot=m.pot||0;verifiedWallet=!!m.verified;myWager=!!m.wager;myAnte=m.ante||0;
       if(typeof m.seed==="number"&&curMap.style!=="garden"){curPalette=paletteFromSeed(m.seed);curTheme=themeFromSeed(m.seed);}else{curPalette=null;curTheme=THEMES.classic;}updateArenaName();suddenOn=false;killfeed=[];bubbles={};snowFlakes=[];genCosmetics();
       CV.width=W;CV.height=H;connected=true;showScreen("game");
       const mb=$("mic-btn");if(mb)mb.style.display="";micState("on");
@@ -1524,7 +1524,7 @@ function connect(){
       if(m.reason==="need_wallet"){if(n)n.textContent="Connect your wallet first to play for real money.";}
       else{realMoneyEnabled=false;updateModeUI();setMode("play");if(n)n.textContent="Real money launches with deposits soon — playing Training for now.";}
       showScreen("lobby");
-    } else if(m.t==="round"){grid=m.grid;state.win=m.win||"";suddenOn=false;myPot=0;
+    } else if(m.t==="round"){grid=m.grid;state.win=m.win||"";suddenOn=false;myPot=0;predBombs=[];predPicked.clear();
       if(typeof m.seed==="number"&&curMap.style!=="garden"){curPalette=paletteFromSeed(m.seed);curTheme=themeFromSeed(m.seed);}snowFlakes=[];updateArenaName();genCosmetics();}
     else if(m.t==="voice-peers"){for(const pid of m.peers)createPeer(pid,true);}
     else if(m.t==="voice-peer-joined"){/* peer will send us an offer */}
@@ -1738,7 +1738,7 @@ function stepLocal(dt){stepAcc+=dt;let n=0;while(stepAcc>=STEP_MS&&n<5){tickL(ST
 const held={u:false,d:false,l:false,r:false};
 function sendInput(){if(ws&&ws.readyState===1)ws.send(JSON.stringify({t:"in",...held}));}
 function setHeld(k,v){if(held[k]!==v){held[k]=v;sendInput();}}
-function bomb(){sfx("place");if(local){if(meLP&&meLP.alive&&phaseL==="playing")placeBombL(meLP);return;}if(ws&&ws.readyState===1)ws.send(JSON.stringify({t:"bomb"}));}
+function bomb(){sfx("place");if(local){if(meLP&&meLP.alive&&phaseL==="playing")placeBombL(meLP);return;}if(ws&&ws.readyState===1){predGhostBomb();ws.send(JSON.stringify({t:"bomb"}));}}
 function detonate(){if(local){if(meLP)detonateL(meLP);return;}if(ws&&ws.readyState===1)ws.send(JSON.stringify({t:"det"}));}
 /* ---------- client-side prediction: YOUR kaboomie moves with 0 delay ----------
    Mirrors the server movePlayer (same collision + corner-slide) but advances a
@@ -1748,6 +1748,27 @@ function detonate(){if(local){if(meLP)detonateL(meLP);return;}if(ws&&ws.readySta
    you're not actively driving, so steady running is never pulled back (no rubber-
    banding); a real desync (respawn/teleport) hard-snaps. */
 let pred=null, predMoving=false, srvX=0, srvY=0, rself=null, predIdle=0; const PRED_TICK=1000/60;
+/* ---------- action prediction: INSTANT bombs & loot pickup ----------
+   Show your bomb the instant you press, and hide loot the instant you step on it,
+   then let the authoritative server snapshot confirm. Timeouts undo anything the
+   server rejects, so nothing can get stuck. Render-only — collision/effects stay
+   server-authoritative. */
+let predBombs=[]; const predPicked=new Map();
+function predGhostBomb(){ if(local||!pred||!grid)return;
+  const pc=Math.round((pred.x-TILE/2)/TILE),pr=Math.round((pred.y-TILE/2)/TILE);
+  if(pc<0||pr<0||pc>=COLS||pr>=ROWS||grid[pr][pc]!==0)return;
+  if(state.bombs.some(b=>b.c===pc&&b.r===pr)||predBombs.some(b=>b.c===pc&&b.r===pr))return; // already a bomb here
+  const me=state.players.find(p=>p.id===myId);
+  predBombs.push({c:pc,r:pr,born:performance.now(),rm:!!(me&&me.rm)}); }
+function predActionTick(){ if(local)return; const now=performance.now();
+  predBombs=predBombs.filter(b=> !state.bombs.some(s=>s.c===b.c&&s.r===b.r) && now-b.born<800); // drop when server confirms (or times out)
+  if(pred){ const pc=Math.round((pred.x-TILE/2)/TILE),pr=Math.round((pred.y-TILE/2)/TILE),key=pc+","+pr;
+    if(!predPicked.has(key)){ const u=state.ups.find(o=>o.c===pc&&o.r===pr), d=(state.drops||[]).find(o=>o.c===pc&&o.r===pr);
+      if(u||d){ predPicked.set(key,now); const x=pc*TILE+TILE/2,y=pr*TILE+TILE/2;
+        if(u){sparkBurst(x,y,_PWRCOL[u.k]||"#fff",10,2.6);sfx("pickup");} else sparkBurst(x,y,"#ffd23f",8,2.4); } } }
+  for(const [k,t] of predPicked){ const cr=k.split(",").map(Number);
+    const still=state.ups.some(o=>o.c===cr[0]&&o.r===cr[1])||(state.drops||[]).some(o=>o.c===cr[0]&&o.r===cr[1]);
+    if(!still||now-t>900)predPicked.delete(k); } } // server removed it (confirmed) or timeout (mis-predicted) -> stop hiding
 function predOverlap(x,y,b){const PHB=TILE*0.30,tx0=b.c*TILE,tx1=tx0+TILE,ty0=b.r*TILE,ty1=ty0+TILE;
   return x+PHB>tx0+2&&x-PHB<tx1-2&&y+PHB>ty0+2&&y-PHB<ty1-2;}
 function predCanBe(px,py,ign){const PHB=TILE*0.30,x0=px-PHB,x1=px+PHB,y0=py-PHB,y1=py+PHB;
@@ -1875,11 +1896,13 @@ function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
     ctx.setTransform(1,0,0,1,_sx,_sy);
     drawFloor();
     for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){const t=grid[r][c];if(t===1)drawWall(c,r);else if(t===2)drawCrate(c,r);}
-    for(const u of state.ups)drawPowerup(u);
-    for(const d of (state.drops||[]))drawDrop(d);
+    for(const u of state.ups)if(!predPicked.has(u.c+","+u.r))drawPowerup(u);
+    for(const d of (state.drops||[]))if(!predPicked.has(d.c+","+d.r))drawDrop(d);
     for(const b of state.bombs)drawBomb(b);
+    for(const b of predBombs)drawBomb({c:b.c,r:b.r,f:1,rm:b.rm}); // instant ghost bombs (until server confirms)
     const ents=Object.keys(rpos).map(id=>({id:+id,rp:rpos[id]}));
     if(!local&&pred)predTick(dt);
+    if(!local)predActionTick();
     const rtime=now-INTERP_DELAY;
     for(const e of ents){const rp=e.rp;let rx,ry;
       if(!local&&e.id===myId&&pred){                                 // you: prediction = instant target, lightly smoothed render (absorbs net jitter/snaps -> no "jumping")
