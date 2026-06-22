@@ -14,7 +14,7 @@ const HB = TILE * 0.30;   // player half-box for collision (smaller = easier to 
 const START_BAL = 1000;   // starting $KABOOM for a fresh wallet
 const DEATH_DROP = 100;   // $KABOOM dropped on death
 const SPEED_BASE = 2.9, SPEED_CAP = 4.4, SPEED_STEP = 0.3;
-const SUDDEN_AFTER = 80000; // ms before the arena starts closing in (long grace period)
+const SUDDEN_AFTER = 60000; // ms before the arena starts closing in (grace period)
 const CLOSE_EVERY = 10000;  // (legacy, unused — closing is now a telegraphed one-tile-at-a-time spiral)
 const CLOSE_STEP = 300;     // ms between telegraphing each single tile (one at a time, outside-in spiral)
 const WARN_MS = 1300;       // telegraph time: a tile flashes this long before it turns into a wall
