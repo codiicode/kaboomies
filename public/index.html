@@ -1578,7 +1578,7 @@ function suddenStepL(){const inset=1+closeIdxL,maxInset=Math.min(COLS>>1,ROWS>>1
   for(const pl of LP){if(!pl.alive)continue;const c=Math.round((pl.x-TILE/2)/TILE),r=Math.round((pl.y-TILE/2)/TILE);
     if(wset.has(c+","+r)){pl.alive=false;evL.push({k:"crush",who:pl.name});localKill(pl,c,r);}}
   closeIdxL++;suddenOn=true;}
-const HBL=()=>TILE*0.34;
+const HBL=()=>TILE*0.30;
 function spawnsL(){const snap=(n,max)=>{n=Math.round(n);if(n<1)n=1;if(n>max-2)n=max-2;if(n%2===0)n+=(n+1<=max-2?1:-1);return n;};
   const fr=[[0.05,0.07],[0.95,0.07],[0.05,0.93],[0.95,0.93],[0.5,0.07],[0.5,0.93],[0.05,0.5],[0.95,0.5],[0.28,0.28],[0.72,0.28],[0.28,0.72],[0.72,0.72]];
   const out=[],seen=new Set();for(const [fc,fri] of fr){const c=snap(fc*(COLS-1),COLS),r=snap(fri*(ROWS-1),ROWS);const k=c+","+r;if(!seen.has(k)){seen.add(k);out.push({c,r});}}return out;}
@@ -1748,9 +1748,9 @@ function detonate(){if(local){if(meLP)detonateL(meLP);return;}if(ws&&ws.readySta
    you're not actively driving, so steady running is never pulled back (no rubber-
    banding); a real desync (respawn/teleport) hard-snaps. */
 let pred=null, predMoving=false, srvX=0, srvY=0, rself=null; const PRED_TICK=1000/60;
-function predOverlap(x,y,b){const PHB=TILE*0.34,tx0=b.c*TILE,tx1=tx0+TILE,ty0=b.r*TILE,ty1=ty0+TILE;
+function predOverlap(x,y,b){const PHB=TILE*0.30,tx0=b.c*TILE,tx1=tx0+TILE,ty0=b.r*TILE,ty1=ty0+TILE;
   return x+PHB>tx0+2&&x-PHB<tx1-2&&y+PHB>ty0+2&&y-PHB<ty1-2;}
-function predCanBe(px,py,ign){const PHB=TILE*0.34,x0=px-PHB,x1=px+PHB,y0=py-PHB,y1=py+PHB;
+function predCanBe(px,py,ign){const PHB=TILE*0.30,x0=px-PHB,x1=px+PHB,y0=py-PHB,y1=py+PHB;
   const c0=Math.floor(x0/TILE),c1=Math.floor(x1/TILE),r0=Math.floor(y0/TILE),r1=Math.floor(y1/TILE);
   for(let r=r0;r<=r1;r++)for(let c=c0;c<=c1;c++){if(c<0||r<0||c>=COLS||r>=ROWS)return false;const t=grid[r][c];if(t===1||t===2)return false;}
   for(const b of state.bombs){if(ign&&ign.has(b))continue;const tx0=b.c*TILE,tx1=tx0+TILE,ty0=b.r*TILE,ty1=ty0+TILE;

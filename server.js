@@ -10,7 +10,7 @@ const FUSE = 2400;        // ms bomb fuse
 const BLAST = 460;        // ms explosion visible / deadly
 const TICK = 1000 / 60;   // sim step
 const SNAP = 1000 / 30;   // broadcast rate (fresher positions -> snappier movement)
-const HB = TILE * 0.34;   // player half-box for collision
+const HB = TILE * 0.30;   // player half-box for collision (smaller = easier to slip through 1-wide gaps / round corners)
 const START_BAL = 1000;   // starting $KABOOM for a fresh wallet
 const DEATH_DROP = 100;   // $KABOOM dropped on death
 const SPEED_BASE = 2.9, SPEED_CAP = 4.4, SPEED_STEP = 0.3;
