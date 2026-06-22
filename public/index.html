@@ -1747,7 +1747,7 @@ function detonate(){if(local){if(meLP)detonateL(meLP);return;}if(ws&&ws.readySta
    Correction toward the server is applied smoothly every frame and ONLY on an axis
    you're not actively driving, so steady running is never pulled back (no rubber-
    banding); a real desync (respawn/teleport) hard-snaps. */
-let pred=null, predMoving=false, srvX=0, srvY=0, rself=null; const PRED_TICK=1000/60;
+let pred=null, predMoving=false, srvX=0, srvY=0, rself=null, predIdle=0; const PRED_TICK=1000/60;
 function predOverlap(x,y,b){const PHB=TILE*0.30,tx0=b.c*TILE,tx1=tx0+TILE,ty0=b.r*TILE,ty1=ty0+TILE;
   return x+PHB>tx0+2&&x-PHB<tx1-2&&y+PHB>ty0+2&&y-PHB<ty1-2;}
 function predCanBe(px,py,ign){const PHB=TILE*0.30,x0=px-PHB,x1=px+PHB,y0=py-PHB,y1=py+PHB;
@@ -1765,13 +1765,15 @@ function predStep(sc){ // advance movement by `sc` server-ticks worth (sc may be
 }
 function predTick(dt){if(!pred)return;const x0=pred.x,y0=pred.y;
   predStep(Math.min(3.5,dt/PRED_TICK)); // PURE prediction while moving -> no corrections, nothing that can "jump"
-  predMoving=Math.hypot(pred.x-x0,pred.y-y0)>0.12;}
+  predMoving=Math.hypot(pred.x-x0,pred.y-y0)>0.12;
+  if(predMoving||held.l||held.r||held.u||held.d)predIdle=0;else predIdle+=dt;} // track genuinely-stopped time
 function predReconcile(sx,sy,sp,alive){
-  if(!pred||!alive){pred={x:sx,y:sy,speed:sp||2.9};srvX=sx;srvY=sy;predMoving=false;return;}
+  if(!pred||!alive){pred={x:sx,y:sy,speed:sp||2.9};srvX=sx;srvY=sy;predMoving=false;predIdle=0;return;}
   pred.speed=sp||pred.speed;srvX=sx;srvY=sy;
-  if(Math.hypot(sx-pred.x,sy-pred.y)>TILE*1.6){pred.x=sx;pred.y=sy;return;} // gross desync (respawn/teleport) -> snap (rself smooths it)
-  // converge to the server ONLY when fully idle — never tug a moving axis, so direction changes can't jump backward
-  if(!(held.l||held.r||held.u||held.d)){pred.x+=(sx-pred.x)*0.12;pred.y+=(sy-pred.y)*0.12;}}
+  if(Math.hypot(sx-pred.x,sy-pred.y)>TILE*2.5){pred.x=sx;pred.y=sy;return;} // gross desync (respawn/teleport) only -> snap (rself smooths it)
+  // converge to the server ONLY after you've genuinely been still >180ms — never during play or brief
+  // direction-change key gaps, so real network lag can't yank you backward mid-movement
+  if(predIdle>180&&!(held.l||held.r||held.u||held.d)){pred.x+=(sx-pred.x)*0.12;pred.y+=(sy-pred.y)*0.12;}}
 /* ---------- remote-player interpolation (Valve/Source style) ----------
    Render other players ~INTERP_DELAY ms in the past and linearly interpolate
    between the two buffered snapshots that bracket that render time. Constant
