@@ -639,7 +639,7 @@ function snapshot(room) {
       b: p.base, s: p.skin, cl: p.clothes, a: p.alive, w: p.wins, bal: bal(p.key, room.cur),
       hp: Math.max(0, Math.round(p.hp)), mh: p.maxHp || MAX_HP, lvl: store.levelFromXp(store.getXp(p.key)),
       kk: !!p.kick, rm: !!p.remote, pi: !!p.pierce, sh: p.shield || 0, iv: p.vuln > 0 ? 1 : 0, st: p.streak || 0,
-      sp: p.speed });
+      sp: p.speed, mb: p.maxBombs, nb: room.bombs.filter(b => b.owner === p.id).length });
   return {
     t: "s",
     players,

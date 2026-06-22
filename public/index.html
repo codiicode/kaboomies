@@ -1759,6 +1759,8 @@ function predGhostBomb(){ if(local||!pred||!grid)return;
   if(pc<0||pr<0||pc>=COLS||pr>=ROWS||grid[pr][pc]!==0)return;
   if(state.bombs.some(b=>b.c===pc&&b.r===pr)||predBombs.some(b=>b.c===pc&&b.r===pr))return; // already a bomb here
   const me=state.players.find(p=>p.id===myId);
+  const cap=(me&&me.mb!=null)?me.mb:1, owned=(me&&me.nb)||0;     // respect bomb capacity (default 1 if server hasn't sent it)
+  if(owned+predBombs.length>=cap)return;                          // confirmed + pending ghosts already at max -> no phantom bomb
   predBombs.push({c:pc,r:pr,born:performance.now(),rm:!!(me&&me.rm)}); }
 function predActionTick(){ if(local)return; const now=performance.now();
   predBombs=predBombs.filter(b=> !state.bombs.some(s=>s.c===b.c&&s.r===b.r) && now-b.born<800); // drop when server confirms (or times out)
