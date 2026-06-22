@@ -15,7 +15,9 @@ const START_BAL = 1000;   // starting $KABOOM for a fresh wallet
 const DEATH_DROP = 100;   // $KABOOM dropped on death
 const SPEED_BASE = 2.9, SPEED_CAP = 4.4, SPEED_STEP = 0.3;
 const SUDDEN_AFTER = 80000; // ms before the arena starts closing in (long grace period)
-const CLOSE_EVERY = 10000;  // ms between each ring closing (slow + fair, not constant)
+const CLOSE_EVERY = 10000;  // (legacy, unused — closing is now a telegraphed one-tile-at-a-time spiral)
+const CLOSE_STEP = 300;     // ms between telegraphing each single tile (one at a time, outside-in spiral)
+const WARN_MS = 1300;       // telegraph time: a tile flashes this long before it turns into a wall
 const POT_SHARE = 0.4;      // fraction of each death-drop that feeds the round pot
 const KICK_STEP = 70;       // ms per tile while a kicked bomb slides
 const INVULN_MS = 1200;     // i-frames granted by a shield save
@@ -232,7 +234,7 @@ function makeRoom(mapId, mode) {
     bombs: [], fires: [], ups: [], drops: [], destroyed: [], walls: [], events: [],
     players: new Map(), pot: 0,
     phase: "playing", winner: "", bombId: 1, roundTimer: null,
-    elapsed: 0, closeRing: 0, nextClose: SUDDEN_AFTER, sudden: false,
+    elapsed: 0, sudden: false, closeOrder: null, closeIdx: 0, pendingWalls: [], closeTimer: 0,
   };
 }
 
@@ -243,7 +245,7 @@ function newRound(room) {
   room.seed = cfg.daily ? dailySeed() : ((Math.random() * 1e9) | 0); // fresh look each round (daily pins to the day)
   room.bombs = []; room.fires = []; room.ups = []; room.drops = []; room.destroyed = []; room.walls = []; room.events = [];
   room.bombId = 1; room.phase = "playing"; room.winner = ""; room.pot = 0;
-  room.elapsed = 0; room.closeRing = 0; room.nextClose = SUDDEN_AFTER; room.sudden = false;
+  room.elapsed = 0; room.sudden = false; room.closeOrder = null; room.closeIdx = 0; room.pendingWalls = []; room.closeTimer = 0;
   let i = 0;
   for (const p of room.players.values()) { resetPlayer(p, sp[i % sp.length]); i++; }
   roundAnte(room);
@@ -255,31 +257,43 @@ function pushEvent(room, ev) {
   if (room.events.length > 12) room.events.shift();
 }
 
-// SUDDEN DEATH: convert the next outermost interior ring to indestructible walls,
-// squeezing players toward the centre so rounds always end fast.
-function closeRing(room) {
-  const inset = 1 + room.closeRing;
-  const maxInset = Math.min(Math.floor(room.cols / 2), Math.floor(room.rows / 2)) - 3;
-  if (inset > maxInset) return; // leave a small central arena around the monument
-  const x0 = inset, x1 = room.cols - 1 - inset, y0 = inset, y1 = room.rows - 1 - inset;
-  const ring = [];
-  for (let c = x0; c <= x1; c++) { ring.push([c, y0]); ring.push([c, y1]); }
-  for (let r = y0 + 1; r < y1; r++) { ring.push([x0, r]); ring.push([x1, r]); }
-  for (const [c, r] of ring) {
-    if (room.grid[r][c] !== 1) { room.grid[r][c] = 1; room.walls.push({ c, r }); }
-    // remove anything sitting there
-    for (let i = room.ups.length - 1; i >= 0; i--) if (room.ups[i].c === c && room.ups[i].r === r) room.ups.splice(i, 1);
-    for (let i = room.drops.length - 1; i >= 0; i--) if (room.drops[i].c === c && room.drops[i].r === r) room.drops.splice(i, 1);
+// SUDDEN DEATH: a telegraphed spiral. Tiles close ONE AT A TIME from the outside in.
+// Each tile is "warned" (room.pendingWalls, broadcast so the client can flash it) for
+// WARN_MS before it actually turns into an indestructible wall — so players always see
+// where the wall is coming and have time to move clear instead of dying with no notice.
+function buildCloseOrder(room) {
+  const order = []; let x0 = 1, y0 = 1, x1 = room.cols - 2, y1 = room.rows - 2;
+  while (x0 <= x1 && y0 <= y1) { // clockwise spiral inward over the interior
+    for (let c = x0; c <= x1; c++) order.push([c, y0]);
+    for (let r = y0 + 1; r <= y1; r++) order.push([x1, r]);
+    if (y1 > y0) for (let c = x1 - 1; c >= x0; c--) order.push([c, y1]);
+    if (x1 > x0) for (let r = y1 - 1; r > y0; r--) order.push([x0, r]);
+    x0++; y0++; x1--; y1--;
   }
-  // crush players caught on the closed ring
-  const wset = new Set(ring.map(([c, r]) => c + "," + r));
-  for (const pl of room.players.values()) {
+  return order.filter(([c, r]) => room.grid[r][c] !== 1); // skip permanent pillars (no point warning a wall)
+}
+function solidifyTile(room, c, r) {
+  if (room.grid[r][c] !== 1) { room.grid[r][c] = 1; room.walls.push({ c, r }); }
+  for (let i = room.ups.length - 1; i >= 0; i--) if (room.ups[i].c === c && room.ups[i].r === r) room.ups.splice(i, 1);
+  for (let i = room.drops.length - 1; i >= 0; i--) if (room.drops[i].c === c && room.drops[i].r === r) room.drops.splice(i, 1);
+  for (const pl of room.players.values()) { // crush only whoever is still standing on it after the warning
     if (!pl.alive) continue;
-    const c = Math.round((pl.x - TILE / 2) / TILE), r = Math.round((pl.y - TILE / 2) / TILE);
-    if (wset.has(c + "," + r)) { pl.alive = false; if (isRanked(room) && !pl.bot) store.bumpStat(pl.key, "deaths"); pushEvent(room, { k: "crush", who: pl.name }); settleDeath(room, pl, null); }
+    const pc = Math.round((pl.x - TILE / 2) / TILE), pr = Math.round((pl.y - TILE / 2) / TILE);
+    if (pc === c && pr === r) { pl.alive = false; if (isRanked(room) && !pl.bot) store.bumpStat(pl.key, "deaths"); pushEvent(room, { k: "crush", who: pl.name }); settleDeath(room, pl, null); }
   }
-  room.closeRing++;
+}
+function stepClosing(room, dt) {
+  if (!room.closeOrder) room.closeOrder = buildCloseOrder(room);
   room.sudden = true;
+  room.closeTimer += dt;
+  while (room.closeTimer >= CLOSE_STEP && room.closeIdx < room.closeOrder.length) { // telegraph the next tile(s)
+    room.closeTimer -= CLOSE_STEP;
+    const cell = room.closeOrder[room.closeIdx++];
+    room.pendingWalls.push({ c: cell[0], r: cell[1], at: room.elapsed + WARN_MS });
+  }
+  for (let i = room.pendingWalls.length - 1; i >= 0; i--) { // turn warned tiles solid once their telegraph elapses
+    if (room.elapsed >= room.pendingWalls[i].at) { const w = room.pendingWalls[i]; room.pendingWalls.splice(i, 1); solidifyTile(room, w.c, w.r); }
+  }
 }
 
 function resetPlayer(p, s) {
@@ -584,10 +598,7 @@ function tick(room, dt) {
 
   if (room.phase === "playing") {
     room.elapsed += dt;
-    while (room.elapsed >= room.nextClose) {
-      closeRing(room);
-      room.nextClose += CLOSE_EVERY;
-    }
+    if (room.elapsed >= SUDDEN_AFTER) stepClosing(room, dt);
   }
   maybeEndRound(room);
 }
@@ -649,6 +660,7 @@ function snapshot(room) {
     drops: room.drops.map(d => ({ c: d.c, r: d.r, a: d.a })),
     pot: room.pot, ev: room.events.slice(),
     ph: room.phase, win: room.winner, sudden: room.sudden,
+    warn: room.pendingWalls.map(w => ({ c: w.c, r: w.r })), // tiles about to become walls (client flashes them)
   };
 }
 
@@ -769,7 +781,7 @@ module.exports = {
   TILE, FUSE, BLAST, START_BAL, DEATH_DROP, SUDDEN_AFTER, CLOSE_EVERY, POT_SHARE, MAX_HP, DMG_CORE, DMG_EDGE,
   KICK_STEP, INVULN_MS, BOUNTY_STEP, BOUNTY_MAX, MAPS, balances,
   bal, setBal, genGrid, latticeGrid, generateRoom, connected, spawns, clearSpawns, monument,
-  makeRoom, newRound, addPlayer, movePlayer, closeRing, dailySeed, roundAnte,
+  makeRoom, newRound, addPlayer, movePlayer, buildCloseOrder, solidifyTile, stepClosing, dailySeed, roundAnte,
   placeBomb, detonate, explode, settleDeath, tick, snapshot, store, auth,
   buildProfile, buildQuests, bumpQuest, characters,
   humanCount, isRanked, botTarget, botWalkable, botBlastCells, botDangerSet,

@@ -1034,6 +1034,12 @@ function drawDrop(d){
   ctx.fillStyle="rgba(20,20,20,.85)";rr(-tw2/2-5,-R-20+bob,tw2+10,15,4);ctx.fill();
   ctx.fillStyle="#ffd23f";ctx.fillText(lbl,0,-R-12+bob);
   ctx.restore();}
+function drawWarn(c,r){const x=c*TILE,y=r*TILE,p=0.5+0.5*Math.sin(performance.now()/130); // sudden-death: tile about to wall up
+  ctx.save();
+  ctx.fillStyle="rgba(255,59,48,"+(0.16+0.26*p)+")";ctx.fillRect(x+1,y+1,TILE-2,TILE-2);
+  ctx.strokeStyle="rgba(255,59,48,"+(0.5+0.5*p)+")";ctx.lineWidth=3;ctx.strokeRect(x+2.5,y+2.5,TILE-5,TILE-5);
+  ctx.fillStyle="rgba(255,255,255,"+(0.55+0.45*p)+")";ctx.font="bold "+Math.round(TILE*0.5)+"px 'VT323',monospace";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("!",x+TILE/2,y+TILE/2+1);
+  ctx.restore();}
 function drawBomb(b){const ctr=center(b.c,b.r),prog=1-b.f,pulse=0.5+0.5*Math.sin(performance.now()/(95-prog*55)),sc=1+pulse*0.09*prog;
   ctx.save();ctx.translate(ctr.x,ctr.y+2);ctx.fillStyle="rgba(0,0,0,.2)";ctx.beginPath();ctx.ellipse(0,13,13,4,0,0,7);ctx.fill();ctx.scale(sc,sc);
   const g=ctx.createRadialGradient(-4,-5,2,0,0,15);g.addColorStop(0,"#5a6072");g.addColorStop(1,"#24272f");ctx.fillStyle=g;ctx.strokeStyle="#15171c";ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,13,0,7);ctx.fill();ctx.stroke();
@@ -1473,7 +1479,7 @@ function renderProfile(p){
 /* ---------- networking ---------- */
 let ws=null, myId=null, connected=false;
 let COLS=15,ROWS=13,TILE=44,W=660,H=572,FUSE=2400,grid=null;
-let state={players:[],bombs:[],fires:[],ups:[],drops:[],ph:"playing",win:""};
+let state={players:[],bombs:[],fires:[],ups:[],drops:[],warn:[],ph:"playing",win:""};
 const rpos={};
 let myBal=START_BAL, myPot=0, pendingAuth=null, verifiedWallet=false, myWager=false, myAnte=0;
 let killfeed=[], bubbles={}, prevBalForSfx=START_BAL;
@@ -1523,14 +1529,14 @@ function connect(){
       if(m.reason==="need_wallet"){if(n)n.textContent="Connect your wallet first to play for real money.";}
       else{realMoneyEnabled=false;updateModeUI();setMode("play");if(n)n.textContent="Real money launches with deposits soon — playing Training for now.";}
       showScreen("lobby");
-    } else if(m.t==="round"){grid=m.grid;state.win=m.win||"";suddenOn=false;myPot=0;predBombs=[];predPicked.clear();
+    } else if(m.t==="round"){grid=m.grid;state.win=m.win||"";state.warn=[];suddenOn=false;myPot=0;predBombs=[];predPicked.clear();
       if(typeof m.seed==="number"&&curMap.style!=="garden"){curPalette=paletteFromSeed(m.seed);curTheme=themeFromSeed(m.seed);}snowFlakes=[];updateArenaName();genCosmetics();}
     else if(m.t==="voice-peers"){for(const pid of m.peers)createPeer(pid,true);}
     else if(m.t==="voice-peer-joined"){/* peer will send us an offer */}
     else if(m.t==="voice-peer-left"){closePeer(m.id);}
     else if(m.t==="rtc"){onSignal(m.from,m.data);}
     else if(m.t==="toast"){pushFeed((m.kind==="quest"?"✅ ":"🔥 ")+m.label+" +"+m.xp+" XP","win");sfx("win");}
-    else if(m.t==="s"){state.players=m.players;state.bombs=m.bombs;state.fires=m.fires;state.ups=m.ups;state.drops=m.drops||[];state.ph=m.ph;state.win=m.win;
+    else if(m.t==="s"){state.players=m.players;state.bombs=m.bombs;state.fires=m.fires;state.ups=m.ups;state.drops=m.drops||[];state.warn=m.warn||[];state.ph=m.ph;state.win=m.win;
       const me=m.players.find(p=>p.id===myId);if(me&&typeof me.bal==="number")myBal=me.bal;
       if(typeof m.pot==="number")myPot=m.pot;
       if(myBal>prevBalForSfx)sfx("pickup");prevBalForSfx=myBal;
@@ -1897,6 +1903,7 @@ function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
     ctx.setTransform(1,0,0,1,_sx,_sy);
     drawFloor();
     for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){const t=grid[r][c];if(t===1)drawWall(c,r);else if(t===2)drawCrate(c,r);}
+    if(state.warn&&state.warn.length)for(const w of state.warn)drawWarn(w.c,w.r); // sudden-death telegraph: this tile is about to become a wall
     for(const u of state.ups)if(!predPicked.has(u.c+","+u.r))drawPowerup(u);
     for(const d of (state.drops||[]))if(!predPicked.has(d.c+","+d.r))drawDrop(d);
     for(const b of state.bombs)drawBomb(b);
