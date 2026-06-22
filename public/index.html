@@ -1455,6 +1455,17 @@ async function refreshLobby(){
   if(currentScreen==="lobby"&&location.host)lobbyTimer=setInterval(()=>{if(currentScreen==="lobby")pull();else clearInterval(lobbyTimer);},2500);
 }
 function renderArenas(maps){const host=$("arena-list");if(!host)return;host.innerHTML="";lastMaps=maps;
+  if(selMode!=="real"){ // TRAINING: one shared free arena, "TRAINING GROUND"
+    host.style.gridTemplateColumns="minmax(0,440px)";host.style.justifyContent="center";
+    const tm=maps.find(m=>m.id==="brawl")||maps[0];if(!tm)return;
+    const card=document.createElement("div");card.className="arena-card";
+    card.innerHTML='<div class="an">TRAINING GROUND</div>'+
+      '<div class="ad">free-for-all practice</div>'+
+      '<div class="stake free">🎮 Free practice · no token cost</div>'+
+      '<div class="ap"><span class="live"></span>'+(tm.players||0)+'<b> / '+(tm.cap||10)+'</b> playing</div>';
+    card.onclick=()=>joinMap(tm.id);host.appendChild(card);return;
+  }
+  host.style.gridTemplateColumns="";host.style.justifyContent=""; // real money: back to the multi-arena stake grid
   maps.sort((a,b)=>(a.drop||0)-(b.drop||0)); // low -> high stakes
   for(const m of maps){const card=document.createElement("div");
     card.className="arena-card"+(m.daily?" daily":"")+(m.drop>=1000?" premium":"");
