@@ -35,7 +35,7 @@
   #screen-start.active{position:fixed;inset:0;z-index:40;overflow-y:auto;display:block;
     background:#fff;background-image:linear-gradient(#ededed 1px,transparent 1px),linear-gradient(90deg,#ededed 1px,transparent 1px);background-size:26px 26px;}
   .cover{position:relative;min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:58px 22px;overflow:hidden;}
-  .cover::before{content:"";position:fixed;inset:9px;border:5px solid var(--ink);pointer-events:none;z-index:60;}
+  .cover::before{content:none;} /* black frame removed */
   #coverfx{position:absolute;inset:0;z-index:1;pointer-events:none;}
   .bg-bombs{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden;}
   .bgb{position:absolute;}
