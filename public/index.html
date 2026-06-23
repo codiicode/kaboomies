@@ -1398,9 +1398,11 @@ function setupAnalyser(id,stream){ try{ if(!vCtx)vCtx=new (window.AudioContext||
 async function enableVoice(){ if(voiceOn||local||!connected)return;
   try{localStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});}
   catch(e){setStatus("🎙️ blocked — allow microphone access to use voice chat (needs https).");return;}
-  voiceOn=true;localStream.getAudioTracks().forEach(t=>t.enabled=false); // push-to-talk: muted until you hold
+  voiceOn=true;localStream.getAudioTracks().forEach(t=>t.enabled=false); // muted until you talk
   micState("on");setupAnalyser(myId,localStream);
-  const p=$("ptt-btn");if(p)p.style.display="";setStatus("🎙️ Voice on — hold V (or the TALK button) to speak");
+  const touch=matchMedia("(hover:none) and (pointer:coarse)").matches;
+  const p=$("ptt-btn");if(p&&!touch)p.style.display=""; // no hold-to-talk button on phones (you can't hold + play)
+  if(!touch)setStatus("🎙️ Voice on — hold V (or the TALK button) to speak");
   if(ws&&ws.readyState===1)ws.send(JSON.stringify({t:"voice-on"}));
 }
 let pttHeld=false;
@@ -1435,7 +1437,13 @@ function updateSpeaking(){ for(const id in vAnalys){const an=vAnalys[id],d=vData
   let sum=0;for(let i=0;i<d.length;i++){const v=(d[i]-128)/128;sum+=v*v;}const rms=Math.sqrt(sum/d.length);
   if(rms>0.045)speaking.add(+id);else speaking.delete(+id);} }
 function teardownVoice(){ for(const id in pcs)closePeer(+id);if(localStream){localStream.getTracks().forEach(t=>t.stop());localStream=null;}voiceOn=false;pttHeld=false;speaking.clear();micState("");const p=$("ptt-btn");if(p){p.style.display="none";p.classList.remove("live");}}
-$("mic-btn").onclick=()=>{ if(voiceOn)disableVoice();else enableVoice(); };
+$("mic-btn").onclick=async ()=>{
+  const touch=matchMedia("(hover:none) and (pointer:coarse)").matches;
+  if(!touch){ if(voiceOn)disableVoice();else enableVoice(); return; } // desktop: on/off, then hold V to talk
+  // MOBILE: hands-free open-mic toggle — tap to talk while playing, tap again to mute (no holding)
+  if(!voiceOn){ await enableVoice(); if(voiceOn){ talk(true); setStatus("🎙️ Mic ON — talk hands-free, tap to mute"); } return; }
+  talk(!pttHeld); setStatus(pttHeld?"🎙️ Mic ON — tap to mute":"🎙️ Mic muted — tap to talk");
+};
 window.addEventListener("keydown",e=>{ if(e.repeat)return;const tag=(e.target&&e.target.tagName)||"";if(tag==="INPUT"||tag==="TEXTAREA")return;if(e.code==="KeyV")talk(true); });
 window.addEventListener("keyup",e=>{ if(e.code==="KeyV")talk(false); });
 (function(){const p=$("ptt-btn");if(!p)return;
