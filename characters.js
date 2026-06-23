@@ -5,13 +5,13 @@ const DEFAULT_BASE = "hero";
 
 // stat is a key of the stats object, or "level"; target is the threshold (>=).
 const CHARACTER_REQS = [
-  { base: "house",  name: "Chillhouse",     label: "Play 3 games",     stat: "games",  target: 3   },
-  { base: "popcat", name: "Popcat",         label: "Break 100 crates", stat: "crates", target: 100 },
-  { base: "sahur",  name: "Tung Sahur",     label: "Win 5 rounds",     stat: "wins",   target: 5   },
-  { base: "alon",   name: "ALON",           label: "Play 25 games",    stat: "games",  target: 25  },
-  { base: "mitch",  name: "MITCH",          label: "Reach Level 5",    stat: "level",  target: 5   },
-  { base: "wif",    name: "WIF",            label: "Get 100 kills",    stat: "kills",  target: 100 },
-  { base: "bull",   name: "Ansem The Black Bull", label: "Win 25 rounds", stat: "wins", target: 25  },
+  { base: "house",  name: "Chillhouse",     label: "Play 10 games",    stat: "games",  target: 10   },
+  { base: "sahur",  name: "Tung Sahur",     label: "Win 20 rounds",    stat: "wins",   target: 20   },
+  { base: "popcat", name: "Popcat",         label: "Break 500 crates", stat: "crates", target: 500  },
+  { base: "wif",    name: "WIF",            label: "Get 300 kills",    stat: "kills",  target: 300  },
+  { base: "bull",   name: "Ansem The Black Bull", label: "Win 75 rounds", stat: "wins", target: 75   },
+  { base: "mitch",  name: "MITCH",          label: "Play 100 games",   stat: "games",  target: 100  },
+  { base: "alon",   name: "ALON",           label: "Get 1000 kills",   stat: "kills",  target: 1000 },
 ].map(Object.freeze);
 Object.freeze(CHARACTER_REQS);
 
