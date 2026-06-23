@@ -1635,7 +1635,7 @@ const POT_SHARE_L=0.4, KICK_STEP=70, INVULN_MS=1200, BOUNTY_STEP=30, BOUNTY_MAX=
 let local=false, BLAST=460, bombsL=[], firesL=[], upsL=[], dropsL=[], LP=[], meLP=null, bombIdL=1, phaseL="playing", winnerL="", roundOverAt=0, roundStartAt=0, roundElapsedL=0, closeIdxL=0, nextCloseL=SUDDEN_AFTER, potL=0, evL=[];
 let blastSeqL=0;
 function getXpL(){return +(Store.get("bb_xp")||0);}
-function levelFromXpL(xp){let lvl=1,need=100;xp=xp||0;while(xp>=need){xp-=need;lvl++;need=100+(lvl-1)*60;}return lvl;}
+function levelFromXpL(xp){let lvl=1,need=1000;xp=xp||0;while(xp>=need){xp-=need;lvl++;need=1000+(lvl-1)*600;}return lvl;}
 function gainXpL(n){if(!n)return;Store.set("bb_xp",getXpL()+n);}
 function localKill(pl,c,r){const dd=(curMap&&curMap.deathDrop!=null)?curMap.deathDrop:100;const bounty=Math.min(BOUNTY_MAX,(pl.streak||0)*BOUNTY_STEP);const amt=Math.min(dd+bounty,pl.bal||0);pl.streak=0;if(amt<=0)return;pl.bal-=amt;
   const cut=Math.round(amt*POT_SHARE_L),coin=amt-cut;potL+=cut;

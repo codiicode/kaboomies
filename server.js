@@ -26,7 +26,7 @@ const BOUNTY_MAX = 240;     // cap on bounty bonus
 const MAX_HP = 100;         // everyone starts each round at 100 HP
 const DMG_CORE = 100;       // blast damage on the bomb tile + tiles adjacent to it (instant kill)
 const DMG_EDGE = 50;        // blast damage further out along the arm (two hits to kill)
-const XP_KILL = 25, XP_WIN = 100, XP_CRATE = 2, XP_PICKUP = 5; // account-level XP rewards
+const XP_KILL = 25, XP_WIN = 100, XP_CRATE = 2; // account-level XP rewards (loot pickups give no XP)
 
 const store = require("./store");
 const auth = require("./auth");
@@ -395,7 +395,6 @@ function movePlayer(room, pl) {
       else if (k === "remote") pl.remote = true;
       else if (k === "pierce") pl.pierce = true;
       else if (k === "shield") pl.shield = Math.min(3, pl.shield + 1);
-      if (!pl.bot) gainXp(room, pl.key, XP_PICKUP);
       if (isRanked(room)) { store.bumpStat(pl.key, "pickups"); bumpQuest(room, pl, "pickups"); }
     }
   }
@@ -403,7 +402,6 @@ function movePlayer(room, pl) {
   for (let i = room.drops.length - 1; i >= 0; i--) {
     if (room.drops[i].c === pc && room.drops[i].r === pr) {
       setBal(pl.key, bal(pl.key, room.cur) + room.drops[i].a, null, room.cur);
-      if (!pl.bot) gainXp(room, pl.key, XP_PICKUP);
       room.drops.splice(i, 1);
     }
   }

@@ -103,17 +103,17 @@ function addXp(key, amt) {
   saveSoon();
   return mem.xp[key];
 }
-// cost to advance from level L to L+1 is 100 + (L-1)*60 (gentle linear ramp)
+// cost to advance from level L to L+1 is 1000 + (L-1)*600 (~10x — leveling is a long grind)
 function levelFromXp(xp) {
-  let lvl = 1, need = 100;
+  let lvl = 1, need = 1000;
   xp = xp || 0;
-  while (xp >= need) { xp -= need; lvl++; need = 100 + (lvl - 1) * 60; }
+  while (xp >= need) { xp -= need; lvl++; need = 1000 + (lvl - 1) * 600; }
   return lvl;
 }
 // progress within the current level: { level, into, need }
 function levelProgress(xp) {
-  let lvl = 1, need = 100; xp = xp || 0;
-  while (xp >= need) { xp -= need; lvl++; need = 100 + (lvl - 1) * 60; }
+  let lvl = 1, need = 1000; xp = xp || 0;
+  while (xp >= need) { xp -= need; lvl++; need = 1000 + (lvl - 1) * 600; }
   return { level: lvl, into: xp, need };
 }
 
