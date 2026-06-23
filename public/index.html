@@ -47,6 +47,16 @@
   .wordmark{font-family:var(--display);font-size:clamp(22px,6.6vw,50px);line-height:1.05;color:var(--ink);letter-spacing:.02em;text-shadow:5px 5px 0 var(--red);margin-bottom:20px;word-break:break-word;}
   .subtitle{font-family:var(--body);font-size:clamp(19px,3.6vw,26px);text-transform:uppercase;letter-spacing:.06em;color:var(--ink);margin-bottom:10px;}
   .hype{font-family:var(--display);font-size:clamp(12px,2.5vw,18px);letter-spacing:.04em;color:var(--red);text-shadow:2px 2px 0 var(--ink);margin-bottom:30px;}
+  .faq{width:100%;max-width:560px;margin:14px auto 30px;text-align:left;}
+  .faq h2{font-family:var(--display);font-size:clamp(16px,4vw,24px);text-align:center;margin-bottom:18px;color:var(--ink);text-shadow:3px 3px 0 var(--red);}
+  .faq details{background:#fff;border:3px solid var(--ink);box-shadow:4px 4px 0 var(--ink);margin-bottom:12px;}
+  .faq summary{font-family:var(--display);font-size:11px;line-height:1.5;padding:12px 14px;cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:10px;color:var(--ink);}
+  .faq summary::-webkit-details-marker{display:none;}
+  .faq summary::after{content:"+";color:var(--red);font-size:18px;line-height:1;}
+  .faq details[open] summary::after{content:"\2013";}
+  .faq details[open] summary{border-bottom:3px solid var(--ink);}
+  .faq p{font-family:var(--body);font-size:17px;line-height:1.45;color:#333;padding:12px 14px;margin:0;}
+  .faq p b{color:var(--ink);}
   .arena{position:relative;z-index:4;width:min(560px,98%);height:150px;margin:0 auto 30px;}
   .ground{position:absolute;left:0;right:0;bottom:22px;height:9px;background:var(--ink);}
   .ground::after{content:"";position:absolute;left:0;right:0;top:9px;height:7px;background:repeating-linear-gradient(90deg,var(--ink) 0 10px,transparent 10px 20px);}
@@ -310,6 +320,18 @@
           <span class="badge">up to 8 players on the same map</span>
           <span class="badge">phone or desktop</span>
         </div>
+        <section class="faq">
+          <h2>FAQ</h2>
+          <details><summary>What is KABOOMIES?</summary><p>A fast, last-kaboomie-standing arena battle. Bomb your rivals, grab power-ups, and be the last one breathing. Up to 8 players per map.</p></details>
+          <details><summary>How do I play?</summary><p>Desktop: move with <b>WASD</b> or the <b>arrow keys</b>, drop a bomb with <b>Space</b>. Mobile: use the on-screen <b>d-pad</b> and bomb button. Blow up crates for power-ups and take out everyone else.</p></details>
+          <details><summary>Is it free?</summary><p>Yes — <b>Training</b> mode is free practice with play-money chips, no cost. Real-money <b>$KABOOM</b> arenas are coming soon.</p></details>
+          <details><summary>What do the power-ups do?</summary><p>💣 more bombs · 🔥 bigger blasts · 👟 speed · 🦵 kick bombs · 📟 remote detonate (press <b>F</b>) · ✷ pierce · 🛡️ shield. Your current loadout is shown at the top of the screen.</p></details>
+          <details><summary>How do levels &amp; XP work?</summary><p>Earn XP from kills (25), wins (100) and crates (2), plus daily quests and login streaks. Levels are <b>prestige only</b> — they never boost combat power — and help unlock characters.</p></details>
+          <details><summary>How do I unlock characters?</summary><p>Play games, rack up wins and kills, break crates and level up. Each locked skin shows exactly what it needs.</p></details>
+          <details><summary>Is there voice chat?</summary><p>Yes. Desktop: <b>hold V</b> to talk (push-to-talk). Mobile: tap the 🎙️ button to talk hands-free, tap again to mute.</p></details>
+          <details><summary>What is sudden death?</summary><p>If a round runs long the arena closes in — one tile at a time, in a spiral. Each tile <b>flashes red</b> before it turns into a wall, so move clear in time.</p></details>
+          <details><summary>Do I need a crypto wallet?</summary><p>No — you can play as a guest. Log in with a Solana wallet to save your stats, level and characters, and earn XP from daily quests.</p></details>
+        </section>
         <div class="domain">KABOOMIES.FUN</div>
       </div>
     </div>
