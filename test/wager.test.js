@@ -15,3 +15,10 @@ test("isWagerGame is true only for real-currency wager maps", () => {
   assert.strictEqual(s.isWagerGame(s.makeRoom("brawl", "real")), true);
   assert.strictEqual(s.isWagerGame(s.makeRoom("brawl", "play")), false);
 });
+
+test("training (play mode) on a wager map is NOT a wager game", () => {
+  for (const id of ["casual", "brawl", "highroller"]) {
+    assert.strictEqual(s.isWagerGame(s.makeRoom(id, "play")), false, id + " play must not be wager");
+    assert.strictEqual(s.isWagerGame(s.makeRoom(id, "real")), true, id + " real must be wager");
+  }
+});

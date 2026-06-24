@@ -633,7 +633,7 @@ function maybeEndRound(room) {
       if (isRanked(room) && !w.bot) {            // a bot winner persists nothing (kept off the leaderboard)
         w.wins++;
         const cfg = MAPS[room.mapId];
-        const rake = (cfg && cfg.wager) ? Math.round(room.pot * cfg.rake) : 0;
+        const rake = isWagerGame(room) ? Math.round(room.pot * cfg.rake) : 0;
         payout = Math.max(0, room.pot - rake);
         if (payout > 0) setBal(w.key, bal(w.key, room.cur) + payout, w.name, room.cur);
         store.bumpWin(w.key, w.name);
@@ -920,7 +920,7 @@ function startServer(port) {
         };
         addPlayer(room, player);
         syncBots(room);
-        if (MAPS[room.mapId].wager && room.phase === "playing") roundAnte(room); // join the current pot
+        if (isWagerGame(room) && room.phase === "playing") roundAnte(room); // join the current pot
         const today = quests.dayIndex(Date.now());
         let streakResult = null;
         if (player.verified) {
@@ -933,7 +933,7 @@ function startServer(port) {
           t: "init", id, map: room.mapId, mode: room.mode, COLS: room.cols, ROWS: room.rows, TILE,
           W: room.W, H: room.H, fuse: FUSE, grid: room.grid, bal: bal(key, room.cur), seed: room.seed,
           verified, pot: room.pot, drop: room.deathDrop,
-          wager: !!MAPS[room.mapId].wager, ante: MAPS[room.mapId].ante || 0, rake: MAPS[room.mapId].rake || 0,
+          wager: isWagerGame(room), ante: MAPS[room.mapId].ante || 0, rake: MAPS[room.mapId].rake || 0,
           quests: player.verified ? buildQuests(key, today) : null,
           streak: streakResult,
         }));
