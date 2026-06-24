@@ -35,9 +35,9 @@ const characters = require("./characters");
 
 // Each map is its own room. One row taller than before.
 const MAPS = {
-  casual:     { name: "Rookie Ring", cols: 33, rows: 17, density: 0.70, deathDrop: 10 },   // low stakes
-  brawl:      { name: "Brawl Arena", cols: 35, rows: 18, density: 0.70, deathDrop: 100 },  // mid stakes (default)
-  highroller: { name: "High Roller", cols: 37, rows: 19, density: 0.72, deathDrop: 1000 }, // high stakes
+  casual:     { name: "Rookie Ring", cols: 33, rows: 17, density: 0.70, deathDrop: 10, wager: true, buyIn: 500, deathStake: 100, rake: 0.05 },   // low stakes
+  brawl:      { name: "Brawl Arena", cols: 35, rows: 18, density: 0.70, deathDrop: 100, wager: true, buyIn: 5000, deathStake: 1000, rake: 0.05 },  // mid stakes (default)
+  highroller: { name: "High Roller", cols: 37, rows: 19, density: 0.72, deathDrop: 1000, wager: true, buyIn: 50000, deathStake: 10000, rake: 0.05 }, // high stakes
 };
 
 function dailySeed() {
