@@ -13,4 +13,15 @@ function config() {
     PAUSED:       process.env.KABOOM_CUSTODY_PAUSED === "1",
   };
 }
-module.exports = { enabled, config };
+// Credit a confirmed on-chain deposit to the sender's REAL balance, exactly once
+// per signature. Idempotent: a replay of the same sig is a no-op (returns false).
+function creditDeposit({ sig, fromWallet, amount }, store) {
+  if (!sig || !fromWallet || !(amount > 0)) return false;
+  if (store.seenSig(sig)) return false;            // idempotent: already credited
+  const cur = "real";
+  store.setBalance(fromWallet, store.getBalance(fromWallet, 0, cur) + amount, null, cur);
+  store.ledger(fromWallet, amount, "deposit", cur);
+  return true;
+}
+
+module.exports = { enabled, config, creditDeposit };

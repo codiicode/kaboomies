@@ -21,7 +21,7 @@ const SUPA_URL = process.env.SUPABASE_URL || "";
 const SUPA_KEY = process.env.SUPABASE_SERVICE_KEY || "";
 const useSupa = !!(SUPA_URL && SUPA_KEY);
 
-let mem = { balances: {}, wins: {}, names: {}, xp: {}, real: {}, stats: {}, streak: {}, quests: {}, ledger: {} };
+let mem = { balances: {}, wins: {}, names: {}, xp: {}, real: {}, stats: {}, streak: {}, quests: {}, ledger: {}, seenSigs: {} };
 let saveTimer = null;
 
 function loadFile() {
@@ -36,6 +36,7 @@ function loadFile() {
     mem.streak = j.streak || {};
     mem.quests = j.quests || {};
     mem.ledger = j.ledger || {};
+    mem.seenSigs = j.seenSigs || {};
   } catch (e) { /* fresh */ }
 }
 
@@ -172,5 +173,15 @@ function ledger(key, delta, kind, cur) {
 }
 function getLedger(key) { return (mem.ledger && mem.ledger[key]) || []; }
 
+// ---- idempotency: persisted set of on-chain signatures we've already credited ----
+// returns true if `sig` was already seen; otherwise marks it seen and returns false.
+function seenSig(sig) {
+  if (!sig) return false;
+  if (mem.seenSigs[sig]) return true;
+  mem.seenSigs[sig] = Date.now();
+  saveSoon();
+  return false;
+}
+
 module.exports = { init, getBalance, setBalance, bumpWin, topScores, getXp, addXp, levelFromXp, levelProgress, useSupa,
-  getStats, bumpStat, getStreak, setStreak, getQuestState, setQuestState, getWins, getName, ledger, getLedger };
+  getStats, bumpStat, getStreak, setStreak, getQuestState, setQuestState, getWins, getName, ledger, getLedger, seenSig };

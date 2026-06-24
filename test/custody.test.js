@@ -34,3 +34,18 @@ test("config exposes positive tunable caps", () => {
   assert.ok(c.DAILY_CAP >= c.MAX_PER_TX);
   assert.strictEqual(typeof c.PAUSED, "boolean");
 });
+
+test("a deposit credits the sender's real balance once; replay of same sig is a no-op", () => {
+  store.setBalance("dep1", 0, null, "real");
+  const ok1 = custody.creditDeposit({ sig: "SIGA", fromWallet: "dep1", amount: 1000 }, store);
+  const ok2 = custody.creditDeposit({ sig: "SIGA", fromWallet: "dep1", amount: 1000 }, store); // replay
+  assert.strictEqual(ok1, true);
+  assert.strictEqual(ok2, false);
+  assert.strictEqual(store.getBalance("dep1", 0, "real"), 1000);
+  const led = store.getLedger("dep1");
+  assert.ok(led.some(e => e.kind === "deposit" && e.delta === 1000));
+});
+test("creditDeposit ignores invalid input", () => {
+  assert.strictEqual(custody.creditDeposit({ sig: "", fromWallet: "x", amount: 10 }, store), false);
+  assert.strictEqual(custody.creditDeposit({ sig: "S2", fromWallet: "x", amount: 0 }, store), false);
+});
