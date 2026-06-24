@@ -308,7 +308,7 @@ function resetPlayer(p, s) {
   p.y = s.r * TILE + TILE / 2;
   p.alive = true;
   p.maxBombs = 1; p.range = 2; p.speed = SPEED_BASE;
-  p.kick = false; p.remote = false; p.pierce = false; p.shield = 0; p.vuln = 0; p.streak = 0; p.anted = false;
+  p.kick = false; p.remote = false; p.pierce = false; p.shield = 0; p.vuln = 0; p.streak = 0; p.anted = false; p.boughtIn = false;
   p.maxHp = MAX_HP; p.hp = MAX_HP; p.hitBlasts = new Set();
   p.ignore = new Set(); p.in = {};
   p.ai = { tc: Math.round((p.x - TILE/2)/TILE), tr: Math.round((p.y - TILE/2)/TILE), flee: false };
@@ -532,6 +532,18 @@ function bumpQuest(room, player, id, n = 1) {
 // arena stakes: a death transfers exactly `stake` (capped at the victim's balance)
 // from victim to killer; self/environment deaths burn it. Replaces the old
 // drop-to-pot/floor economy in training.
+function chargeBuyIn(room, p) {
+  if (!isWagerGame(room) || p.bot || p.boughtIn) return;
+  const cfg = MAPS[room.mapId];
+  if (bal(p.key, room.cur) >= cfg.buyIn) {
+    setBal(p.key, bal(p.key, room.cur) - cfg.buyIn, p.name, room.cur);
+    room.pot += cfg.buyIn;
+    p.boughtIn = true;
+  } else {
+    p.boughtIn = false; p.alive = false;
+  }
+}
+
 function settleDeath(room, victim, killer) {
   victim.streak = 0;
   // practice (solo + bots) or a bot victim: no chips move. bots have no balance,
@@ -787,7 +799,7 @@ module.exports = {
   KICK_STEP, INVULN_MS, BOUNTY_STEP, BOUNTY_MAX, MAPS, balances,
   bal, setBal, genGrid, latticeGrid, generateRoom, connected, spawns, clearSpawns, monument,
   makeRoom, newRound, addPlayer, movePlayer, buildCloseOrder, solidifyTile, stepClosing, dailySeed, roundAnte,
-  placeBomb, detonate, explode, settleDeath, tick, snapshot, store, auth,
+  placeBomb, detonate, explode, settleDeath, chargeBuyIn, tick, snapshot, store, auth,
   buildProfile, buildQuests, bumpQuest, characters,
   humanCount, isRanked, isWagerGame, botTarget, botWalkable, botBlastCells, botDangerSet,
   makeBot, syncBots, broadcast, rateAllow,

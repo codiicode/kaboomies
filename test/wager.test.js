@@ -22,3 +22,24 @@ test("training (play mode) on a wager map is NOT a wager game", () => {
     assert.strictEqual(s.isWagerGame(s.makeRoom(id, "real")), true, id + " real must be wager");
   }
 });
+
+test("buy-in is charged once per game and locked into the pot", () => {
+  const room = s.makeRoom("brawl", "real");            // buyIn 5000
+  const p = s.addPlayer(room, { id: 1, key: "w1", name: "A" });
+  s.setBal("w1", 12000, "A", "real");
+  s.chargeBuyIn(room, p);
+  assert.strictEqual(s.bal("w1", "real"), 7000);       // 12000 - 5000
+  assert.strictEqual(room.pot, 5000);
+  assert.strictEqual(p.boughtIn, true);
+  s.chargeBuyIn(room, p);                              // again = no-op
+  assert.strictEqual(room.pot, 5000);
+  assert.strictEqual(s.bal("w1", "real"), 7000);
+});
+test("chargeBuyIn does nothing in a training (play) room", () => {
+  const room = s.makeRoom("brawl", "play");
+  const p = s.addPlayer(room, { id: 1, key: "t1", name: "T" });
+  s.setBal("t1", 12000, "T", "play");
+  s.chargeBuyIn(room, p);
+  assert.strictEqual(room.pot, 0);
+  assert.ok(!p.boughtIn);
+});
