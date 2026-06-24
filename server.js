@@ -549,6 +549,15 @@ function settleDeath(room, victim, killer) {
   // practice (solo + bots) or a bot victim: no chips move. bots have no balance,
   // so we never setBal a bot key (which would leak onto the leaderboard).
   if (!isRanked(room) || victim.bot) return;
+  if (isWagerGame(room)) {
+    const stake = MAPS[room.mapId].deathStake;
+    const lost = Math.min(stake, bal(victim.key, room.cur));
+    if (lost <= 0) return;
+    setBal(victim.key, bal(victim.key, room.cur) - lost, victim.name, room.cur);
+    const c = Math.round((victim.x - TILE / 2) / TILE), r = Math.round((victim.y - TILE / 2) / TILE);
+    room.drops.push({ c, r, a: lost });
+    return;
+  }
   const stake = room.deathDrop != null ? room.deathDrop : DEATH_DROP;
   const lost = Math.min(stake, bal(victim.key, room.cur));
   if (lost <= 0) return;

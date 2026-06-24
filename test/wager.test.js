@@ -43,3 +43,16 @@ test("chargeBuyIn does nothing in a training (play) room", () => {
   assert.strictEqual(room.pot, 0);
   assert.ok(!p.boughtIn);
 });
+
+test("in a wager game, death drops the stake as loot (not a direct transfer)", () => {
+  const room = s.makeRoom("brawl", "real");            // deathStake 1000
+  const v = s.addPlayer(room, { id: 1, key: "v", name: "V" });
+  const k = s.addPlayer(room, { id: 2, key: "k", name: "K" });
+  s.setBal("v", 3000, "V", "real");
+  s.setBal("k", 0, "K", "real");
+  v.x = 5 * s.TILE + s.TILE / 2; v.y = 5 * s.TILE + s.TILE / 2;
+  s.settleDeath(room, v, k);
+  assert.strictEqual(s.bal("v", "real"), 2000);        // victim lost 1000
+  assert.strictEqual(s.bal("k", "real"), 0);           // killer did NOT get it directly
+  assert.ok(room.drops.some(d => d.a === 1000));       // it's on the ground as loot
+});
