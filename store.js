@@ -21,7 +21,7 @@ const SUPA_URL = process.env.SUPABASE_URL || "";
 const SUPA_KEY = process.env.SUPABASE_SERVICE_KEY || "";
 const useSupa = !!(SUPA_URL && SUPA_KEY);
 
-let mem = { balances: {}, wins: {}, names: {}, xp: {}, real: {}, stats: {}, streak: {}, quests: {}, ledger: {}, seenSigs: {} };
+let mem = { balances: {}, wins: {}, names: {}, xp: {}, real: {}, stats: {}, streak: {}, quests: {}, ledger: {}, seenSigs: {}, wdDay: {} };
 let saveTimer = null;
 
 function loadFile() {
@@ -37,6 +37,7 @@ function loadFile() {
     mem.quests = j.quests || {};
     mem.ledger = j.ledger || {};
     mem.seenSigs = j.seenSigs || {};
+    mem.wdDay = j.wdDay || {};
   } catch (e) { /* fresh */ }
 }
 
@@ -182,6 +183,16 @@ function seenSig(sig) {
   saveSoon();
   return false;
 }
+// Split check-from-mark, so callers (e.g. withdraw) only burn a key on SUCCESS.
+// (seenSig stays atomic check-and-mark for deposit idempotency.)
+function hasSig(sig) { return !!(mem.seenSigs && mem.seenSigs[sig]); }
+function markSig(sig) { if (!sig) return; mem.seenSigs[sig] = Date.now(); saveSoon(); }
+
+// ---- uncapped per-UTC-day withdraw tally (the daily cap must be exact, not
+// truncated by the 200-entry ledger cap). mem.wdDay[wallet][YYYY-MM-DD] = total. ----
+function withdrawnToday(key, dayKey) { return (mem.wdDay[key] && mem.wdDay[key][dayKey]) || 0; }
+function addWithdrawnToday(key, dayKey, amt) { const d = (mem.wdDay[key] = mem.wdDay[key] || {}); d[dayKey] = (d[dayKey] || 0) + amt; saveSoon(); }
 
 module.exports = { init, getBalance, setBalance, bumpWin, topScores, getXp, addXp, levelFromXp, levelProgress, useSupa,
-  getStats, bumpStat, getStreak, setStreak, getQuestState, setQuestState, getWins, getName, ledger, getLedger, seenSig };
+  getStats, bumpStat, getStreak, setStreak, getQuestState, setQuestState, getWins, getName, ledger, getLedger, seenSig,
+  hasSig, markSig, withdrawnToday, addWithdrawnToday };

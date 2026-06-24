@@ -852,10 +852,10 @@ function rateAllow(state, now, rate = 30, burst = 50) {
 // touch balances or the chain. Auth is verified by the HTTP layer before calling these.
 async function handleWithdraw(body) {
   if (!custody.enabled()) return { error: "disabled" };
+  if (!body.idemKey) return { error: "idem_required" }; // mandatory: no fabricated key (would defeat idempotency)
   const key = String(body.wallet).slice(0, 64);
   const amount = Number(body.amount);
-  const idemKey = body.idemKey || (key + ":" + Date.now());
-  return await custody.withdraw({ wallet: key, amount, idemKey }, store);
+  return await custody.withdraw({ wallet: key, amount, idemKey: body.idemKey }, store);
 }
 
 module.exports = {

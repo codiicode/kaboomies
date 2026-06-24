@@ -158,8 +158,17 @@ function startWatcher(store) {
 // ---- guarded withdraw (money LEAVES the treasury — the most safety-critical path) ----
 // Invariants enforced, in order: never send when PAUSED, over caps, or insufficient;
 // debit the player's REAL balance BEFORE sending; roll the debit back if the send
-// throws; never double-send on an idemKey replay. `sendFn` is injectable so tests
+// throws; never double-send on a COMPLETED idemKey. `sendFn` is injectable so tests
 // drive a fake; production lazily builds + signs the real SPL transfer.
+//
+// Idempotency contract (money-safety critical):
+//   - A key is burned (markSig) ONLY after a successful send. So a failed/rejected
+//     withdraw is RETRYABLE with the SAME idemKey (it never counted, never debited).
+//   - A true replay of a COMPLETED withdraw returns {ok,replay} without re-sending.
+//   - Two concurrent calls with the same key: the second returns {ok:false,in_flight}.
+const inFlight = new Set();            // idemSlots currently being processed (single-process)
+const lastWd = new Map();              // wallet -> ts of last SUCCESSFUL withdraw (cooldown)
+
 async function withdraw({ wallet, amount, idemKey }, store, sendFn) {
   if (!sendFn) sendFn = defaultSendFn; // production: lazy real SPL transfer (not used in tests)
   const cfg = config();
@@ -171,50 +180,48 @@ async function withdraw({ wallet, amount, idemKey }, store, sendFn) {
   if (amount < cfg.MIN_WITHDRAW) return { ok: false, reason: "min" };
   if (amount > cfg.MAX_PER_TX) return { ok: false, reason: "max" };
 
-  // ---- idempotency ----
-  // Mark the key seen AFTER validation passes but BEFORE debit/send, so a retry of
-  // an in-flight key can't double-spend. seenSig() returns true if already seen
-  // (this key already started/finished processing) and otherwise marks it + returns
-  // false. A replay therefore short-circuits without debiting or sending again.
-  const idemSlot = "wd:" + idemKey;
-  if (store.seenSig(idemSlot)) return { ok: true, replay: true };
-
-  // ---- daily cap ----
-  // Sum today's (UTC day) net "withdraw" activity for this wallet from the ledger:
-  // "withdraw" deltas are negative (debits) and "withdraw-rollback" deltas are
-  // positive (credit-backs of failed sends). Summing both gives the NET amount that
-  // actually left today; we add the requested amount and compare its magnitude to
-  // the cap. Rollbacks thus correctly offset their failed withdrawals.
-  const now = Date.now();
-  const dayStart = Date.UTC(
-    new Date(now).getUTCFullYear(),
-    new Date(now).getUTCMonth(),
-    new Date(now).getUTCDate()
-  );
-  let netToday = 0; // negative number: sum of today's withdraw + rollback deltas
-  for (const e of store.getLedger(wallet)) {
-    if (!e || typeof e.ts !== "number" || e.ts < dayStart) continue;
-    if (e.kind === "withdraw" || e.kind === "withdraw-rollback") netToday += e.delta;
-  }
-  const usedToday = Math.abs(netToday); // magnitude that left the treasury today
-  if (usedToday + amount > cfg.DAILY_CAP) return { ok: false, reason: "daily_cap" };
-
-  // ---- balance ----
-  const bal = store.getBalance(wallet, 0, "real");
-  if (!(bal >= amount)) return { ok: false, reason: "insufficient" };
-
-  // ---- DEBIT FIRST, then send ----
-  store.setBalance(wallet, bal - amount, null, "real");
-  store.ledger(wallet, -amount, "withdraw", "real");
+  // ---- idempotency: only a COMPLETED withdraw has burned the slot ----
+  const slot = "wd:" + idemKey;
+  if (store.hasSig(slot)) return { ok: true, replay: true };  // already completed once
+  if (inFlight.has(slot)) return { ok: false, reason: "in_flight" };
+  inFlight.add(slot);
   try {
-    const sig = await sendFn({ to: wallet, amount });
-    return { ok: true, sig };
-  } catch (e) {
-    // ROLLBACK: re-credit using the current balance (avoid a stale `bal`).
-    const now2 = store.getBalance(wallet, 0, "real");
-    store.setBalance(wallet, now2 + amount, null, "real");
-    store.ledger(wallet, +amount, "withdraw-rollback", "real");
-    return { ok: false, reason: "send_failed" };
+    // ---- cooldown (per wallet) ----
+    if (cfg.COOLDOWN_MS > 0 && Date.now() - (lastWd.get(wallet) || 0) < cfg.COOLDOWN_MS) {
+      return { ok: false, reason: "cooldown" };               // retryable; key NOT burned
+    }
+
+    // ---- daily cap (uncapped per-UTC-day tally; exact regardless of ledger truncation) ----
+    const dayKey = new Date().toISOString().slice(0, 10);     // YYYY-MM-DD (UTC)
+    if (store.withdrawnToday(wallet, dayKey) + amount > cfg.DAILY_CAP) {
+      return { ok: false, reason: "daily_cap" };              // retryable; key NOT burned
+    }
+
+    // ---- balance ----
+    const bal = store.getBalance(wallet, 0, "real");
+    if (!(bal >= amount)) return { ok: false, reason: "insufficient" }; // key NOT burned
+
+    // ---- DEBIT FIRST, then send ----
+    store.setBalance(wallet, bal - amount, null, "real");
+    store.ledger(wallet, -amount, "withdraw", "real");
+    try {
+      const sig = await sendFn({ to: wallet, amount });
+      // SUCCESS: burn the key, record the day-tally + cooldown. Only now is it spent.
+      store.markSig(slot);
+      store.addWithdrawnToday(wallet, dayKey, amount);
+      lastWd.set(wallet, Date.now());
+      return { ok: true, sig };
+    } catch (e) {
+      // ROLLBACK: re-credit using the current balance (avoid a stale `bal`). The key
+      // is NOT burned and the day-tally is NOT bumped, so a retry with the same
+      // idemKey is allowed and counts nothing against the cap.
+      const now2 = store.getBalance(wallet, 0, "real");
+      store.setBalance(wallet, now2 + amount, null, "real");
+      store.ledger(wallet, +amount, "withdraw-rollback", "real");
+      return { ok: false, reason: "send_failed" };
+    }
+  } finally {
+    inFlight.delete(slot);
   }
 }
 

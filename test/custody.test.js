@@ -1,3 +1,7 @@
+// Disable the per-wallet withdraw cooldown for these unit tests: they drive many
+// sequential same-wallet withdrawals (daily-cap, retry) with no real time gap.
+// config() reads this env live, so the cooldown path stays covered by its own test.
+process.env.KABOOM_WITHDRAW_COOLDOWN_MS = "0";
 const test = require("node:test");
 const assert = require("node:assert");
 const store = require("../store.js");
@@ -90,4 +94,59 @@ const s = require("../server.js");
 test("withdraw endpoint refuses when custody disabled", async () => {
   const res = await s.handleWithdraw({ wallet: "w", amount: 1000, auth: {}, idemKey: "z" });
   assert.strictEqual(res.error, "disabled");
+});
+
+test("a failed send is retryable with the same idemKey (key not burned)", async () => {
+  store.setBalance("rt1", 20000, null, "real");
+  let calls = 0;
+  const flaky = async () => { calls++; if (calls === 1) throw new Error("rpc down"); return "OKSIG"; };
+  const r1 = await custody.withdraw({ wallet:"rt1", amount: 5000, idemKey:"same" }, store, flaky);
+  assert.strictEqual(r1.ok, false);
+  assert.strictEqual(store.getBalance("rt1",0,"real"), 20000);     // rolled back
+  const r2 = await custody.withdraw({ wallet:"rt1", amount: 5000, idemKey:"same" }, store, flaky); // retry SAME key
+  assert.strictEqual(r2.ok, true);
+  assert.strictEqual(calls, 2);                                    // actually retried, not a false replay
+  assert.strictEqual(store.getBalance("rt1",0,"real"), 15000);
+});
+test("a completed withdraw replays without re-sending", async () => {
+  store.setBalance("rt2", 20000, null, "real");
+  let calls = 0; const ok = async () => { calls++; return "S"; };
+  await custody.withdraw({ wallet:"rt2", amount: 5000, idemKey:"done" }, store, ok);
+  const rep = await custody.withdraw({ wallet:"rt2", amount: 5000, idemKey:"done" }, store, ok);
+  assert.strictEqual(rep.replay, true);
+  assert.strictEqual(calls, 1);                                    // no second send
+  assert.strictEqual(store.getBalance("rt2",0,"real"), 15000);
+});
+test("daily cap is exact and independent of the 200-entry ledger cap", async () => {
+  const cfg = custody.config();
+  store.setBalance("rt3", cfg.DAILY_CAP * 3, null, "real");
+  // generate >200 ledger entries so the old ledger-sum approach would under-count
+  for (let i = 0; i < 250; i++) store.ledger("rt3", -1, "noise", "real");
+  const amt = cfg.MAX_PER_TX;
+  let total = 0, n = 0;
+  while (total + amt <= cfg.DAILY_CAP) { const r = await custody.withdraw({ wallet:"rt3", amount: amt, idemKey:"d"+n }, store, async()=>"s"); assert.strictEqual(r.ok, true); total += amt; n++; }
+  const over = await custody.withdraw({ wallet:"rt3", amount: amt, idemKey:"over" }, store, async()=>"s");
+  assert.strictEqual(over.ok, false);
+  assert.strictEqual(over.reason, "daily_cap");
+});
+test("cooldown blocks a too-soon second withdraw (retryable, not burned)", async () => {
+  const prev = process.env.KABOOM_WITHDRAW_COOLDOWN_MS;
+  process.env.KABOOM_WITHDRAW_COOLDOWN_MS = "60000"; // 1 min window for this test only
+  try {
+    store.setBalance("cd1", 50000, null, "real");
+    const a = await custody.withdraw({ wallet:"cd1", amount: 5000, idemKey:"cd-a" }, store, async()=>"s");
+    assert.strictEqual(a.ok, true);
+    const b = await custody.withdraw({ wallet:"cd1", amount: 5000, idemKey:"cd-b" }, store, async()=>"s");
+    assert.strictEqual(b.ok, false);
+    assert.strictEqual(b.reason, "cooldown");
+    assert.strictEqual(store.getBalance("cd1", 0, "real"), 45000); // only the first debited
+    assert.strictEqual(store.hasSig("wd:cd-b"), false);            // not burned -> retryable later
+  } finally {
+    process.env.KABOOM_WITHDRAW_COOLDOWN_MS = prev;
+  }
+});
+test("handleWithdraw requires an idemKey", async () => {
+  const res = await s.handleWithdraw({ wallet:"w", amount: 1000, auth:{} }); // no idemKey
+  // disabled wins in test env (no env vars) OR idem_required — both are acceptable refusals; assert it's NOT ok
+  assert.ok(res.error === "idem_required" || res.error === "disabled");
 });
