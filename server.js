@@ -33,6 +33,7 @@ const store = require("./store");
 const auth = require("./auth");
 const quests = require("./quests");
 const characters = require("./characters");
+const custody = require("./custody.js"); // safe to require: no @solana loaded unless real-money is enabled
 
 // Each map is its own room. One row taller than before.
 const MAPS = {
@@ -846,6 +847,17 @@ function rateAllow(state, now, rate = 30, burst = 50) {
   return false;
 }
 
+// ---- custody HTTP route bodies (factored out so the disabled gate is unit-testable) ----
+// The disabled gate MUST win even before auth: when real-money env isn't set we never
+// touch balances or the chain. Auth is verified by the HTTP layer before calling these.
+async function handleWithdraw(body) {
+  if (!custody.enabled()) return { error: "disabled" };
+  const key = String(body.wallet).slice(0, 64);
+  const amount = Number(body.amount);
+  const idemKey = body.idemKey || (key + ":" + Date.now());
+  return await custody.withdraw({ wallet: key, amount, idemKey }, store);
+}
+
 module.exports = {
   TILE, FUSE, BLAST, START_BAL, DEATH_DROP, SUDDEN_AFTER, CLOSE_EVERY, POT_SHARE, MAX_HP, DMG_CORE, DMG_EDGE, GAME_ROUNDS,
   KICK_STEP, INVULN_MS, BOUNTY_STEP, BOUNTY_MAX, MAPS, balances,
@@ -854,7 +866,7 @@ module.exports = {
   placeBomb, detonate, explode, settleDeath, chargeBuyIn, sweepLoot, endGame, startGame, tick, snapshot, store, auth,
   buildProfile, buildQuests, bumpQuest, characters,
   humanCount, isRanked, isWagerGame, botTarget, botWalkable, botBlastCells, botDangerSet,
-  makeBot, syncBots, broadcast, rateAllow,
+  makeBot, syncBots, broadcast, rateAllow, custody, handleWithdraw,
 };
 
 // ---------- live server (exported so tests can start it on an ephemeral port) ----------
@@ -920,6 +932,59 @@ function startServer(port) {
         }
       });
       return;
+    }
+    // ---- custody routes (real-money). All gated: when custody.enabled() is false
+    // they short-circuit to {error:"disabled"} and never touch balances/the chain. ----
+    {
+      const cpath = (req.url || "").split("?")[0];
+      const CUSTODY_ROUTES = new Set(["/wallet", "/deposit-info", "/withdraw"]);
+      if (req.method === "POST" && CUSTODY_ROUTES.has(cpath)) {
+        let body = "", aborted = false;
+        req.on("data", (c) => {
+          if (aborted) return;
+          body += c;
+          if (body.length > 4096) {
+            aborted = true;
+            res.writeHead(413, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "payload_too_large" }));
+            req.destroy();
+          }
+        });
+        req.on("end", async () => {
+          if (aborted) return;
+          const reply = (code, obj) => {
+            res.writeHead(code, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+            res.end(JSON.stringify(obj));
+          };
+          try {
+            const m = JSON.parse(body || "{}");
+            // /deposit-info: no auth needed (public treasury + mint), but still gated.
+            if (cpath === "/deposit-info") {
+              if (!custody.enabled()) return reply(200, { error: "disabled" });
+              const web3 = require("@solana/web3.js");
+              const bs58 = require("bs58").default || require("bs58");
+              const treasuryKp = web3.Keypair.fromSecretKey(bs58.decode(process.env.TREASURY_SECRET));
+              return reply(200, { treasury: treasuryKp.publicKey.toBase58(), mint: process.env.KABOOM_MINT });
+            }
+            // /wallet and /withdraw are auth-verified.
+            if (!(m.wallet && m.auth && auth.verify(m.wallet, m.auth.ts, m.auth.sig))) {
+              return reply(401, { error: "unauthorized" });
+            }
+            const key = String(m.wallet).slice(0, 64);
+            if (cpath === "/wallet") {
+              if (!custody.enabled()) return reply(200, { error: "disabled" });
+              return reply(200, { balance: store.getBalance(key, 0, "real"), ledger: store.getLedger(key) });
+            }
+            if (cpath === "/withdraw") {
+              const out = await handleWithdraw({ wallet: key, amount: m.amount, idemKey: m.idemKey });
+              return reply(200, out);
+            }
+          } catch (e) {
+            return reply(400, { error: "bad_request" });
+          }
+        });
+        return;
+      }
     }
     let url = req.url.split("?")[0];
     if (url === "/") url = "/index.html";

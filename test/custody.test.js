@@ -85,3 +85,9 @@ test("withdraw enforces min, max-per-tx, balance; rolls back on send failure", a
   assert.strictEqual(rb.reason, "send_failed");
   assert.strictEqual(store.getBalance("wd2", 0, "real"), before); // rolled back
 });
+
+const s = require("../server.js");
+test("withdraw endpoint refuses when custody disabled", async () => {
+  const res = await s.handleWithdraw({ wallet: "w", amount: 1000, auth: {}, idemKey: "z" });
+  assert.strictEqual(res.error, "disabled");
+});
