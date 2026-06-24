@@ -49,3 +49,13 @@ test("creditDeposit ignores invalid input", () => {
   assert.strictEqual(custody.creditDeposit({ sig: "", fromWallet: "x", amount: 10 }, store), false);
   assert.strictEqual(custody.creditDeposit({ sig: "S2", fromWallet: "x", amount: 0 }, store), false);
 });
+
+test("parseIncoming extracts {sig, fromWallet, amount} for a KABOOM transfer to treasury", () => {
+  const fake = custody._fakeTx({ sig: "S1", from: "walletA", to: "TREASURY_ATA", mint: "MINT", amount: 2500 });
+  const out = custody.parseIncoming(fake, { treasuryAta: "TREASURY_ATA", mint: "MINT" });
+  assert.deepStrictEqual(out, { sig: "S1", fromWallet: "walletA", amount: 2500 });
+});
+test("parseIncoming returns null for unrelated mint or outbound transfer", () => {
+  const other = custody._fakeTx({ sig: "S2", from: "walletA", to: "TREASURY_ATA", mint: "OTHER", amount: 10 });
+  assert.strictEqual(custody.parseIncoming(other, { treasuryAta: "TREASURY_ATA", mint: "MINT" }), null);
+});
