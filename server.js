@@ -246,11 +246,14 @@ function newRound(room) {
   room.grid = generateRoom(room.cols, room.rows, cfg.density);
   room.seed = cfg.daily ? dailySeed() : ((Math.random() * 1e9) | 0); // fresh look each round (daily pins to the day)
   room.bombs = []; room.fires = []; room.ups = []; room.drops = []; room.destroyed = []; room.walls = []; room.events = [];
-  room.bombId = 1; room.phase = "playing"; room.winner = ""; room.pot = 0;
+  // wager pots accumulate across the GAME_ROUNDS rounds of a game; training resets each round
+  room.bombId = 1; room.phase = "playing"; room.winner = ""; if (!isWagerGame(room)) room.pot = 0;
   room.elapsed = 0; room.sudden = false; room.closeOrder = null; room.closeIdx = 0; room.pendingWalls = []; room.closeTimer = 0;
   let i = 0;
   for (const p of room.players.values()) { resetPlayer(p, sp[i % sp.length]); i++; }
   roundAnte(room);
+  // wager games: lock each human's once-per-game buy-in into the fresh pot
+  if (isWagerGame(room)) for (const p of room.players.values()) if (!p.bot) chargeBuyIn(room, p);
   syncBots(room);
 }
 
@@ -646,6 +649,32 @@ function sweepLoot(room) {
   room.drops = [];
 }
 
+// a wager game is best-of GAME_ROUNDS: at game end the player with the most
+// round wins takes the pot minus rake (ties split evenly), then a new game begins.
+function endGame(room) {
+  sweepLoot(room); // defensive: any loot left on the floor goes into the pot
+  const cfg = MAPS[room.mapId];
+  const rake = Math.round(room.pot * (cfg.rake || 0));
+  const prize = Math.max(0, room.pot - rake);
+  let max = -1; for (const w of room.roundWins.values()) if (w > max) max = w;
+  const winners = [...room.players.values()].filter(p => !p.bot && (room.roundWins.get(p.id) || 0) === max && max > 0);
+  if (winners.length && prize > 0) {
+    const share = Math.floor(prize / winners.length);
+    for (const w of winners) { setBal(w.key, bal(w.key, room.cur) + share, w.name, room.cur); if (store.bumpWin) store.bumpWin(w.key, w.name); }
+  }
+  room.pot = 0;
+  pushEvent(room, { k: "gameover", winners: winners.map(w => w.name), prize });
+  startGame(room);
+}
+function startGame(room) {
+  room.gameRound = 1; room.roundWins = new Map();
+  // clear the once-per-game buy-in flag so the NEXT round (newRound, phase "playing")
+  // locks fresh buy-ins into a fresh pot. We do NOT charge here: endGame must leave
+  // the pot at 0 between games, and the just-paid winner shouldn't be re-charged
+  // synchronously off their winnings.
+  for (const p of room.players.values()) p.boughtIn = false;
+}
+
 function maybeEndRound(room) {
   if (room.phase !== "playing") return;
   const list = [...room.players.values()];
@@ -660,11 +689,11 @@ function maybeEndRound(room) {
       let payout = 0;
       if (isRanked(room) && !w.bot) {            // a bot winner persists nothing (kept off the leaderboard)
         w.wins++;
-        const cfg = MAPS[room.mapId];
-        const rake = isWagerGame(room) ? Math.round(room.pot * cfg.rake) : 0;
-        payout = Math.max(0, room.pot - rake);
-        if (payout > 0) setBal(w.key, bal(w.key, room.cur) + payout, w.name, room.cur);
-        store.bumpWin(w.key, w.name);
+        if (!isWagerGame(room)) {                // training: round winner takes the pot now
+          payout = Math.max(0, room.pot);
+          if (payout > 0) setBal(w.key, bal(w.key, room.cur) + payout, w.name, room.cur);
+          store.bumpWin(w.key, w.name);
+        }
         bumpQuest(room, w, "win");
       }
       if (!w.bot) gainXp(room, w.key, XP_WIN);
@@ -672,6 +701,12 @@ function maybeEndRound(room) {
     } else {
       room.winner = "Draw";
       pushEvent(room, { k: "draw" });
+    }
+    if (isWagerGame(room)) {
+      sweepLoot(room); // pull uncollected loot into the pot before resolving the round
+      if (w && !w.bot) room.roundWins.set(w.id, (room.roundWins.get(w.id) || 0) + 1);
+      if (room.gameRound >= GAME_ROUNDS) endGame(room);
+      else room.gameRound++; // existing round-restart flow continues as today
     }
   }
 }
@@ -815,7 +850,7 @@ module.exports = {
   KICK_STEP, INVULN_MS, BOUNTY_STEP, BOUNTY_MAX, MAPS, balances,
   bal, setBal, genGrid, latticeGrid, generateRoom, connected, spawns, clearSpawns, monument,
   makeRoom, newRound, addPlayer, movePlayer, buildCloseOrder, solidifyTile, stepClosing, dailySeed, roundAnte,
-  placeBomb, detonate, explode, settleDeath, chargeBuyIn, sweepLoot, tick, snapshot, store, auth,
+  placeBomb, detonate, explode, settleDeath, chargeBuyIn, sweepLoot, endGame, startGame, tick, snapshot, store, auth,
   buildProfile, buildQuests, bumpQuest, characters,
   humanCount, isRanked, isWagerGame, botTarget, botWalkable, botBlastCells, botDangerSet,
   makeBot, syncBots, broadcast, rateAllow,

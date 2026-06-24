@@ -57,6 +57,28 @@ test("in a wager game, death drops the stake as loot (not a direct transfer)", (
   assert.ok(room.drops.some(d => d.a === 1000));       // it's on the ground as loot
 });
 
+// --- W6: 5-round game loop + game-end settlement ---
+test("after GAME_ROUNDS the most-round-wins player takes pot minus rake", () => {
+  const room = s.makeRoom("brawl", "real");
+  const a = s.addPlayer(room, { id: 1, key: "a", name: "A" });
+  const b = s.addPlayer(room, { id: 2, key: "b", name: "B" });
+  room.pot = 10000; room.roundWins = new Map([[1,3],[2,2]]); room.gameRound = s.GAME_ROUNDS;
+  s.setBal("a", 0, "A", "real");
+  s.endGame(room);
+  assert.strictEqual(s.bal("a", "real"), 9500); // 10000 - 5%
+  assert.strictEqual(room.pot, 0);
+  assert.strictEqual(room.gameRound, 1);        // startGame reset
+});
+test("tie splits the pot evenly", () => {
+  const room = s.makeRoom("brawl", "real");
+  s.addPlayer(room, { id: 1, key: "a", name: "A" }); s.addPlayer(room, { id: 2, key: "b", name: "B" });
+  room.pot = 10000; room.roundWins = new Map([[1,2],[2,2]]);
+  s.setBal("a", 0, "A", "real"); s.setBal("b", 0, "B", "real");
+  s.endGame(room);
+  assert.strictEqual(s.bal("a", "real"), 4750);
+  assert.strictEqual(s.bal("b", "real"), 4750);
+});
+
 // --- W7: sweep uncollected loot into the pot ---
 test("uncollected loot is swept into the pot when swept", () => {
   const room = s.makeRoom("brawl", "real");
