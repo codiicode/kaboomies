@@ -610,7 +610,7 @@ function tick(room, dt) {
 
 function roundAnte(room) {
   const cfg = MAPS[room.mapId];
-  if (!cfg || !cfg.wager) return;
+  if (!isWagerGame(room) || cfg.ante == null) return;
   for (const p of room.players.values()) {
     if (p.anted) continue;
     if (bal(p.key, room.cur) >= cfg.ante) { setBal(p.key, bal(p.key, room.cur) - cfg.ante, p.name, room.cur); room.pot += cfg.ante; p.anted = true; }
@@ -749,7 +749,7 @@ function makeBot(room){
 }
 // fill training rooms to BOT_TARGET while a human is present; fade bots out as humans join.
 function syncBots(room){
-  if (MAPS[room.mapId] && MAPS[room.mapId].wager) return;        // never in wager/real rooms
+  if (isWagerGame(room)) return;        // never in wager/real rooms
   const humans = humanCount(room);
   const bots = [...room.players.values()].filter(p=>p.bot);
   if (humans === 0) { for (const b of bots) room.players.delete(b.id); return; } // let the room drop
