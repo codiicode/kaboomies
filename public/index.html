@@ -269,6 +269,45 @@
   .profile-guest{font-family:var(--body);font-size:18px;text-transform:uppercase;color:var(--grey);text-align:center;padding:30px 10px;}
   @media(max-width:480px){.profile-grid{grid-template-columns:repeat(2,1fr);}}
 
+  /* ---- WALLET ---- */
+  #screen-wallet.active{position:fixed;inset:0;z-index:50;overflow-y:auto;
+    background:#fff;background-image:linear-gradient(#ededed 1px,transparent 1px),linear-gradient(90deg,#ededed 1px,transparent 1px);background-size:26px 26px;}
+  #wallet-back{position:fixed;top:calc(18px + env(safe-area-inset-top));left:calc(18px + env(safe-area-inset-left));z-index:60;}
+  .wallet-screen{max-width:560px;margin:0 auto;padding:64px 16px calc(40px + env(safe-area-inset-bottom));}
+  .wallet-head{background:#fff;border:3px solid var(--ink);box-shadow:5px 5px 0 var(--ink);padding:18px 16px;margin-bottom:16px;text-align:center;}
+  .wh-title{font-family:var(--display);font-size:12px;color:var(--gold-deep);margin-bottom:14px;}
+  .wh-bal{font-family:var(--body);font-size:22px;text-transform:uppercase;letter-spacing:.03em;color:var(--ink);}
+  .wh-bal b{font-family:var(--display);font-size:22px;color:var(--gold-deep);}
+  .wh-sub{font-family:var(--body);font-size:16px;color:var(--grey);text-transform:uppercase;margin-top:8px;}
+  .wallet-guest{font-family:var(--body);font-size:18px;text-transform:uppercase;color:var(--grey);text-align:center;padding:30px 10px;}
+  .wcard{background:#fff;border:3px solid var(--ink);box-shadow:4px 4px 0 var(--ink);padding:14px;margin-bottom:16px;}
+  .wcard-title{font-family:var(--display);font-size:9px;color:var(--red);margin-bottom:12px;}
+  .wmsg{font-family:var(--body);font-size:18px;color:var(--grey);line-height:1.35;text-transform:none;}
+  .wmsg b{color:var(--ink);}
+  .wdisabled{font-family:var(--body);font-size:18px;text-transform:uppercase;color:var(--grey);text-align:center;padding:8px 4px;}
+  .waddr{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+  .waddr code{flex:1;min-width:0;word-break:break-all;font-family:ui-monospace,monospace;font-size:14px;
+    background:#f7f7f7;border:2px solid var(--ink);padding:8px 10px;color:var(--ink);}
+  .wcopy{font-family:var(--display);font-size:9px;color:#fff;background:var(--ink);border:3px solid var(--ink);box-shadow:3px 3px 0 var(--red);padding:9px 11px 7px;flex:none;}
+  .wcopy:active{transform:translate(3px,3px);box-shadow:none;}
+  .wrow{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;}
+  input.wamount{flex:1;min-width:120px;padding:10px 12px;border:3px solid var(--ink);background:#fff;font-family:var(--body);font-size:20px;color:var(--ink);outline:none;}
+  input.wamount:focus{box-shadow:4px 4px 0 var(--red);}
+  input.wamount:disabled{background:#f2f2f2;color:var(--grey);}
+  .wsubmit{font-family:var(--display);font-size:10px;color:#fff;background:var(--red);border:3px solid var(--ink);box-shadow:4px 4px 0 var(--ink);padding:0 16px;flex:none;}
+  .wsubmit:active{transform:translate(4px,4px);box-shadow:none;}
+  .wsubmit:disabled{background:var(--grey);cursor:not-allowed;}
+  .wresult{font-family:var(--body);font-size:16px;text-transform:uppercase;margin-top:10px;min-height:18px;}
+  .wresult.ok{color:#2a9d54;} .wresult.err{color:var(--red);}
+  .ledger{display:flex;flex-direction:column;}
+  .lrow{display:flex;justify-content:space-between;gap:10px;align-items:baseline;padding:8px 0;border-bottom:1px dashed #ddd;}
+  .lrow:last-child{border-bottom:none;}
+  .lrow .lk{font-family:var(--body);font-size:17px;text-transform:uppercase;color:var(--ink);}
+  .lrow .lt{font-family:var(--body);font-size:14px;color:var(--grey);text-transform:uppercase;}
+  .lrow .ld{font-family:var(--display);font-size:11px;flex:none;}
+  .lrow .ld.pos{color:#2a9d54;} .lrow .ld.neg{color:var(--red);}
+  .ledger-empty{font-family:var(--body);font-size:17px;text-transform:uppercase;color:var(--grey);padding:6px 0;}
+
   /* ---- GAME ---- */
   #screen-game.active{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-start;justify-content:center;padding:96px 0 0;
     background:#fff;background-image:linear-gradient(#ededed 1px,transparent 1px),linear-gradient(90deg,#ededed 1px,transparent 1px);background-size:26px 26px;}
@@ -386,6 +425,7 @@
       <div class="panel-head">
         <button class="back" id="lb-back">‹ back</button>
         <div><h2>Choose your arena</h2><div class="sub">live rooms &middot; pick one and brawl</div></div>
+        <button class="wbtn ghost" id="lobby-wallet-btn" onclick="showScreen('wallet')" style="display:none">💰 WALLET</button>
         <button class="wbtn ghost" id="profile-btn" onclick="openProfile()">👤 PROFILE</button>
       </div>
       <div class="lobby-wrap">
@@ -423,6 +463,32 @@
       <div class="profile-sec-title">DAILY QUESTS</div>
       <div class="profile-quests" id="profile-quests"></div>
       <div class="profile-guest" id="profile-guest" style="display:none">Log in with your wallet to track stats and earn XP from daily quests.</div>
+    </div>
+  </section>
+
+  <section class="screen" id="screen-wallet">
+    <button class="wbtn" id="wallet-back" onclick="showScreen('lobby')">&lt; BACK</button>
+    <div class="wallet-screen">
+      <div class="wallet-head">
+        <div class="wh-title">💰 $KABOOM WALLET</div>
+        <div class="wh-bal"><b id="wallet-bal">—</b> $KABOOM</div>
+        <div class="wh-sub" id="wallet-addr"></div>
+      </div>
+      <div id="wallet-guest" class="wallet-guest" style="display:none">Connect your wallet to deposit, withdraw and view your $KABOOM balance.</div>
+      <div id="wallet-body">
+        <div class="wcard">
+          <div class="wcard-title">📥 DEPOSIT</div>
+          <div id="deposit-block"></div>
+        </div>
+        <div class="wcard">
+          <div class="wcard-title">📤 WITHDRAW</div>
+          <div id="withdraw-block"></div>
+        </div>
+        <div class="wcard">
+          <div class="wcard-title">🧾 HISTORY</div>
+          <div id="ledger-block"></div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -1349,6 +1415,7 @@ function showScreen(name){currentScreen=name;for(const s of document.querySelect
   if(name==="start")sizeFX();
   if(name==="create"){buildCustomizer();updateWalletUI();loadCharacters().then(()=>{buildCustomizer();});}
   if(name==="lobby"){refreshLobby();}
+  if(name==="wallet"){openWallet();}
   if(name==="game"){fitCanvas();if(matchMedia("(hover:none) and (pointer:coarse)").matches)$("touch").classList.add("on");startMusic();}
   else stopMusic();
   window.scrollTo({top:0,behavior:"smooth"});}
@@ -1364,6 +1431,7 @@ function setMode(mode){
   const n=$("mode-note");if(n)n.textContent=mode==="real"
     ? (realMoneyEnabled?"Real $KABOOM stakes — deposit to play, withdraw your winnings.":"Real $KABOOM stakes · deposits open soon — preview the arenas below.")
     : "Free practice — no real money, no token cost. Just get better.";
+  const wb=$("lobby-wallet-btn");if(wb)wb.style.display=mode==="real"?"":"none"; // wallet only in real-money mode
   if(lastMaps)renderArenas(lastMaps); // stake labels differ by mode
 }
 // real money is presented as the primary mode; the server still gates real joins
@@ -1584,6 +1652,79 @@ function renderProfile(p){
     ctx.clearRect(0,0,av.width,av.height);
     drawHero(av.width/2,av.height*0.7,120,{base:playerSkin.base,skin:playerSkin.skin,clothes:playerSkin.clothes,house:playerSkin.house,roof:playerSkin.roof,hat:playerSkin.hat,hatCol:playerSkin.hatCol,face:1,phase:0,moving:false,sp:1,blink:0});
     ctx=real; }
+}
+
+/* ---------- wallet panel ($KABOOM deposit / withdraw) ---------- */
+let _withdrawIdem=null; // reuse the same idempotency key across retries of one withdraw intent
+function relTime(ts){const s=Math.max(0,Math.floor((Date.now()-ts)/1000));
+  if(s<60)return s+"s ago";const m=Math.floor(s/60);if(m<60)return m+"m ago";
+  const h=Math.floor(m/60);if(h<24)return h+"h ago";const d=Math.floor(h/24);return d+"d ago";}
+function setWalletDisabled(msg){
+  $("wallet-bal").textContent="—";
+  $("deposit-block").innerHTML='<div class="wdisabled">'+esc(msg)+'</div>';
+  $("withdraw-block").innerHTML='<div class="wrow"><input class="wamount" type="number" placeholder="Amount" disabled><button class="wsubmit" disabled>WITHDRAW</button></div>'+
+    '<div class="wresult"></div>';
+  $("ledger-block").innerHTML='<div class="ledger-empty">No transactions yet.</div>';
+}
+async function openWallet(){
+  const guest=$("wallet-guest"),body=$("wallet-body");
+  // need a verified wallet for /wallet + /withdraw
+  if(walletAddr)await ensureSigner();
+  const auth=await signLogin();
+  $("wallet-addr").textContent=walletAddr?(walletAddr.slice(0,4)+"…"+walletAddr.slice(-4)):"";
+  if(!auth||!walletAddr){guest.style.display="block";body.style.display="none";return;}
+  guest.style.display="none";body.style.display="";
+  // deposit info is unauthenticated; balance/ledger need auth
+  let dep=null,wal=null;
+  try{const r=await fetch("/deposit-info",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({})});if(r.ok)dep=await r.json();}catch(e){}
+  try{const r=await fetch("/wallet",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({wallet:walletAddr,auth})});if(r.ok)wal=await r.json();}catch(e){}
+  const disabled=!dep||dep.error==="disabled"||!wal||wal.error==="disabled";
+  if(disabled){setWalletDisabled("Real-money deposits open soon.");renderLedger(null);return;}
+  $("wallet-bal").textContent=(typeof wal.balance==="number"?wal.balance.toLocaleString():"0");
+  renderDeposit(dep);renderWithdraw();renderLedger(wal.ledger);
+}
+function renderDeposit(dep){
+  const addr=dep&&dep.treasury?dep.treasury:"";
+  $("deposit-block").innerHTML=
+    '<div class="waddr"><code id="dep-addr">'+esc(addr)+'</code><button class="wcopy" id="dep-copy">COPY</button></div>'+
+    '<div class="wmsg">Send <b>$KABOOM</b> from your wallet to this address — it credits your balance <b>automatically</b>.</div>';
+  const cp=$("dep-copy");if(cp)cp.onclick=async()=>{try{await navigator.clipboard.writeText(addr);cp.textContent="COPIED ✓";setTimeout(()=>{cp.textContent="COPY";},1400);}catch(e){cp.textContent="COPY?";}};
+}
+function renderWithdraw(){
+  $("withdraw-block").innerHTML=
+    '<div class="wrow"><input class="wamount" id="wd-amount" type="number" min="1" step="1" placeholder="Amount"><button class="wsubmit" id="wd-go">WITHDRAW</button></div>'+
+    '<div class="wresult" id="wd-result"></div>';
+  const go=$("wd-go"),amt=$("wd-amount"),out=$("wd-result");
+  go.onclick=async()=>{
+    const amount=Math.floor(+amt.value);
+    out.className="wresult";
+    if(!(amount>0)){out.textContent="Enter an amount greater than 0.";out.classList.add("err");return;}
+    if(!_withdrawIdem)_withdrawIdem="wd-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
+    if(walletAddr)await ensureSigner();
+    const auth=await signLogin();
+    if(!auth){out.textContent="Reconnect your wallet and try again.";out.classList.add("err");return;}
+    go.disabled=true;out.className="wresult";out.textContent="Processing…";
+    let res=null;
+    try{const r=await fetch("/withdraw",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({wallet:walletAddr,auth,amount,idemKey:_withdrawIdem})});res=await r.json();}catch(e){res={error:"network"};}
+    go.disabled=false;
+    if(res&&res.ok){out.textContent="✓ Sent"+(res.sig?(" · "+String(res.sig).slice(0,8)+"…"):"");out.classList.add("ok");
+      _withdrawIdem=null;amt.value="";openWallet();return;} // refresh balance + ledger after a successful intent
+    const reason=res?(res.reason||res.error):"failed";
+    const nice={disabled:"Withdrawals open soon.",unauthorized:"Reconnect your wallet and try again.",
+      insufficient:"Not enough balance.",idem_required:"Try again.",network:"Network error — try again."}[reason]||("Couldn't withdraw ("+esc(reason||"error")+").");
+    out.textContent=nice;out.classList.add("err");
+  };
+}
+function renderLedger(ledger){
+  const host=$("ledger-block");if(!host)return;
+  if(!ledger||!ledger.length){host.innerHTML='<div class="ledger-empty">No transactions yet.</div>';return;}
+  const rows=ledger.slice().sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,20).map(e=>{
+    const d=+e.delta||0,sign=d>0?"+":"",cls=d>=0?"pos":"neg";
+    return '<div class="lrow"><div><div class="lk">'+esc(e.kind||"tx")+'</div><div class="lt">'+relTime(e.ts||Date.now())+'</div></div>'+
+      '<div class="ld '+cls+'">'+sign+d.toLocaleString()+'</div></div>';
+  }).join("");
+  host.innerHTML='<div class="ledger">'+rows+'</div>';
 }
 
 /* ---------- networking ---------- */
