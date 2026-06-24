@@ -88,3 +88,14 @@ test("uncollected loot is swept into the pot when swept", () => {
   assert.strictEqual(room.pot, 6000);
   assert.strictEqual(room.drops.length, 0);
 });
+
+// --- W8: snapshot exposes pot/round fields ---
+test("snapshot exposes pot, gameRound (gr) and GAME_ROUNDS (gn)", () => {
+  const room = s.makeRoom("brawl", "real");
+  s.addPlayer(room, { id: 1, key: "a", name: "A" });
+  room.pot = 5000; room.gameRound = 2;
+  const snap = s.snapshot(room);
+  assert.strictEqual(snap.pot, 5000);
+  assert.strictEqual(snap.gr, 2);
+  assert.strictEqual(snap.gn, s.GAME_ROUNDS);
+});

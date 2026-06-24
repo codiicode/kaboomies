@@ -726,7 +726,7 @@ function snapshot(room) {
     fires: room.fires.map(f => ({ c: f.c, r: f.r })),
     ups: room.ups.map(u => ({ c: u.c, r: u.r, k: u.k })),
     drops: room.drops.map(d => ({ c: d.c, r: d.r, a: d.a })),
-    pot: room.pot, ev: room.events.slice(),
+    pot: room.pot, gr: room.gameRound, gn: GAME_ROUNDS, ev: room.events.slice(),
     ph: room.phase, win: room.winner, sudden: room.sudden,
     warn: room.pendingWalls.map(w => ({ c: w.c, r: w.r })), // tiles about to become walls (client flashes them)
   };
@@ -970,6 +970,14 @@ function startServer(port) {
           // and always requires a verified wallet (never guests)
           if (!REAL_MONEY_ENABLED) { ws.send(JSON.stringify({ t: "blocked", reason: "real_soon" })); return; }
           if (!verified) { ws.send(JSON.stringify({ t: "blocked", reason: "need_wallet" })); return; }
+          // wager join gate: must be able to cover the buy-in plus at least one death stake
+          const wcfg = MAPS[mapId];
+          if (wcfg && wcfg.wager) {
+            const wkey = String(m.wallet).slice(0, 64);
+            if (bal(wkey, "real") < (wcfg.buyIn + wcfg.deathStake)) {
+              ws.send(JSON.stringify({ t: "blocked", reason: "insufficient" })); return;
+            }
+          }
         }
         room = roomFor(mapId, mode);
         const id = nextId++;
@@ -983,7 +991,7 @@ function startServer(port) {
         };
         addPlayer(room, player);
         syncBots(room);
-        if (isWagerGame(room) && room.phase === "playing") roundAnte(room); // join the current pot
+        if (isWagerGame(room) && room.phase === "playing") chargeBuyIn(room, player); // lock the once-per-game buy-in into the pot
         const today = quests.dayIndex(Date.now());
         let streakResult = null;
         if (player.verified) {
