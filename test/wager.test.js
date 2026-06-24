@@ -89,6 +89,38 @@ test("uncollected loot is swept into the pot when swept", () => {
   assert.strictEqual(room.drops.length, 0);
 });
 
+// --- W9: buy-in charged once per game across the real newRound restart path ---
+test("buy-in is charged exactly once per game across round restarts (newRound path)", () => {
+  const room = s.makeRoom("brawl", "real"); // buyIn 5000
+  const a = s.addPlayer(room, { id: 1, key: "ga", name: "A" });
+  const b = s.addPlayer(room, { id: 2, key: "gb", name: "B" });
+  s.setBal("ga", 30000, "A", "real"); s.setBal("gb", 30000, "B", "real");
+  s.newRound(room);                                  // round 1 -> charge once each
+  assert.strictEqual(room.pot, 10000);
+  assert.strictEqual(s.bal("ga", "real"), 25000);
+  assert.strictEqual(s.bal("gb", "real"), 25000);
+  s.newRound(room);                                  // round 2 restart -> NO re-charge
+  assert.strictEqual(room.pot, 10000, "pot must not grow from buy-ins on round restart");
+  assert.strictEqual(s.bal("ga", "real"), 25000, "player must not be charged again");
+  s.newRound(room); s.newRound(room);                // rounds 3,4 -> still no re-charge
+  assert.strictEqual(room.pot, 10000);
+  assert.strictEqual(s.bal("ga", "real"), 25000);
+});
+
+test("a new game (after endGame/startGame) charges a fresh buy-in", () => {
+  const room = s.makeRoom("brawl", "real");
+  const a = s.addPlayer(room, { id: 1, key: "ha", name: "A" });
+  const b = s.addPlayer(room, { id: 2, key: "hb", name: "B" });
+  s.setBal("ha", 30000, "A", "real"); s.setBal("hb", 30000, "B", "real");
+  s.newRound(room);                                  // game 1 buy-ins
+  assert.strictEqual(room.pot, 10000);
+  room.roundWins = new Map([[1, 3], [2, 2]]); room.gameRound = s.GAME_ROUNDS;
+  s.endGame(room);                                   // pays out, pot->0, startGame resets boughtIn
+  assert.strictEqual(room.pot, 0);
+  s.newRound(room);                                  // game 2 round 1 -> fresh buy-ins
+  assert.strictEqual(room.pot, 10000, "next game must charge buy-ins again");
+});
+
 // --- W8: snapshot exposes pot/round fields ---
 test("snapshot exposes pot, gameRound (gr) and GAME_ROUNDS (gn)", () => {
   const room = s.makeRoom("brawl", "real");

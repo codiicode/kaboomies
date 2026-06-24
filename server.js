@@ -311,7 +311,7 @@ function resetPlayer(p, s) {
   p.y = s.r * TILE + TILE / 2;
   p.alive = true;
   p.maxBombs = 1; p.range = 2; p.speed = SPEED_BASE;
-  p.kick = false; p.remote = false; p.pierce = false; p.shield = 0; p.vuln = 0; p.streak = 0; p.anted = false; p.boughtIn = false;
+  p.kick = false; p.remote = false; p.pierce = false; p.shield = 0; p.vuln = 0; p.streak = 0; p.anted = false;
   p.maxHp = MAX_HP; p.hp = MAX_HP; p.hitBlasts = new Set();
   p.ignore = new Set(); p.in = {};
   p.ai = { tc: Math.round((p.x - TILE/2)/TILE), tr: Math.round((p.y - TILE/2)/TILE), flee: false };
@@ -321,6 +321,7 @@ function addPlayer(room, p) {
   const sp = spawns(room.cols, room.rows);
   const idx = room.players.size % sp.length;
   p.wins = p.wins || 0;
+  p.boughtIn = false; // once-per-game buy-in flag; persists across rounds, reset only at game start
   resetPlayer(p, sp[idx]);
   room.players.set(p.id, p);
   if (!p.bot && !balances.has(p.key)) balances.set(p.key, START_BAL); // bots never get a balance row (kept off leaderboard)
