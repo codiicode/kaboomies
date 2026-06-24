@@ -140,6 +140,7 @@
   #bal-hud b{font-family:var(--display);font-size:12px;color:#b9821a;}
   #pot-hud{color:var(--red);} #pot-hud b{color:var(--red);}
   #ante-hud{color:#b9821a;}
+  #round-hud{color:var(--ink);} #round-hud b{font-family:var(--display);font-size:12px;color:var(--ink);}
   #abil{position:fixed;top:46px;left:50%;transform:translateX(-50%);z-index:55;display:flex;gap:5px;font-size:16px;pointer-events:none;}
   #abil span{background:rgba(20,20,20,.82);border:2px solid #000;border-radius:5px;padding:2px 6px;font-family:var(--body);color:#fff;}
   #abil b{font-family:var(--display);font-size:9px;}
@@ -285,6 +286,10 @@
   #banner{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:56;pointer-events:none}
   #banner .bx{background:#fff;border:5px solid var(--ink);box-shadow:10px 10px 0 var(--red);padding:26px 42px;font-family:var(--display);font-size:clamp(15px,4vw,26px);text-align:center;line-height:1.4}
   #banner small{display:block;font-family:var(--body);font-size:20px;color:var(--grey);text-transform:uppercase;margin-top:12px}
+  /* game-over: pot win uses the gold/high-stakes treatment to set it apart from a round win */
+  #banner .bx.gameover{border-color:var(--gold-deep);box-shadow:10px 10px 0 var(--gold-deep);color:var(--gold-deep);animation:goPop .28s steps(3);}
+  #banner .bx.gameover small{color:var(--ink);}
+  @keyframes goPop{0%{transform:scale(.82);opacity:0}100%{transform:scale(1);opacity:1}}
   #touch{position:fixed;inset:0;z-index:54;display:none;pointer-events:none}
   #dpad{position:absolute;left:calc(18px + env(safe-area-inset-left));bottom:calc(20px + env(safe-area-inset-bottom));width:168px;height:168px;pointer-events:auto;touch-action:none}
   #dpad .k{position:absolute;width:54px;height:54px;background:rgba(255,255,255,.82);border:3px solid var(--ink);box-shadow:3px 3px 0 rgba(20,20,20,.55);display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--ink)}
@@ -426,7 +431,7 @@
     <div id="topbar">
       <div id="arena-name"></div>
       <div id="score-left"></div>
-      <div id="bal-hud">🪙 <b id="bal-val">0</b> $KABOOM <span id="pot-hud">· POT <b id="pot-val">0</b></span><span id="ante-hud"></span></div>
+      <div id="bal-hud"><span id="round-hud" style="display:none">🎯 ROUND <b id="round-val">1/5</b> · </span>🪙 <b id="bal-val">0</b> $KABOOM <span id="pot-hud">· POT <b id="pot-val">0</b></span><span id="ante-hud"></span></div>
       <div id="score-right"></div>
       <div id="status"></div>
     </div>
@@ -1584,7 +1589,7 @@ function renderProfile(p){
 /* ---------- networking ---------- */
 let ws=null, myId=null, connected=false;
 let COLS=15,ROWS=13,TILE=44,W=660,H=572,FUSE=2400,grid=null;
-let state={players:[],bombs:[],fires:[],ups:[],drops:[],warn:[],ph:"playing",win:""};
+let state={players:[],bombs:[],fires:[],ups:[],drops:[],warn:[],ph:"playing",win:"",gr:0,gn:0};
 const rpos={};
 let myBal=START_BAL, myPot=0, pendingAuth=null, verifiedWallet=false, myWager=false, myAnte=0;
 let killfeed=[], bubbles={}, prevBalForSfx=START_BAL;
@@ -1596,7 +1601,14 @@ function applyEvent(e){
   else if(e.k==="draw"){pushFeed("— draw —");}
   else if(e.k==="emote"){bubbles[e.id]={e:e.e,until:performance.now()+2200};sfx("emote");}
   else if(e.k==="levelup"){pushFeed("⭐ "+e.who+" reached Lv "+e.lvl,"win");sfx("win");}
+  else if(e.k==="gameover"){
+    const winners=Array.isArray(e.winners)?e.winners:(e.winners?[e.winners]:[]);
+    gameOver={winners,prize:+e.prize||0,until:performance.now()+6000};
+    sfx("win");
+    pushFeed("🏆 "+(winners.length?winners.join(" & "):"Nobody")+" takes the pot"+(e.prize?(" +"+e.prize):""),"win");
+  }
 }
+let gameOver=null; // {winners:[],prize,until} — fades the game-over overlay after a few seconds
 function renderKillfeed(){const host=$("killfeed");if(!host)return;const now=performance.now();killfeed=killfeed.filter(k=>k.until>now);
   host.innerHTML=killfeed.map(k=>'<div class="kf '+k.cls+'">'+k.text+'</div>').join("");}
 let _authCache=null; // {wallet,ts,sig} — reuse a fresh signature so you don't sign a wallet popup on every join
@@ -1641,7 +1653,7 @@ function connect(){
     else if(m.t==="voice-peer-left"){closePeer(m.id);}
     else if(m.t==="rtc"){onSignal(m.from,m.data);}
     else if(m.t==="toast"){pushFeed((m.kind==="quest"?"✅ ":"🔥 ")+m.label+" +"+m.xp+" XP","win");sfx("win");}
-    else if(m.t==="s"){state.players=m.players;state.bombs=m.bombs;state.fires=m.fires;state.ups=m.ups;state.drops=m.drops||[];state.warn=m.warn||[];state.ph=m.ph;state.win=m.win;
+    else if(m.t==="s"){state.players=m.players;state.bombs=m.bombs;state.fires=m.fires;state.ups=m.ups;state.drops=m.drops||[];state.warn=m.warn||[];state.ph=m.ph;state.win=m.win;state.gr=m.gr||0;state.gn=m.gn||0;
       const me=m.players.find(p=>p.id===myId);if(me&&typeof me.bal==="number")myBal=me.bal;
       if(typeof m.pot==="number")myPot=m.pot;
       if(myBal>prevBalForSfx)sfx("pickup");prevBalForSfx=myBal;
@@ -1953,7 +1965,17 @@ function drawScore(){const L=$("score-left"),R=$("score-right");if(!L||!R)return
     const w=document.createElement("div");w.textContent="🏆"+p.w+" 🪙"+(p.bal!=null?p.bal:0);
     row.appendChild(nm);row.appendChild(w);(i<4?L:R).appendChild(row);});
   L.style.display=list.length?"":"none";R.style.display=list.length>4?"":"none";}
-function updateBanner(){const b=$("banner"),txt=$("bannerText");
+function updateBanner(){const b=$("banner"),txt=$("bannerText");const now=performance.now();
+  if(gameOver&&gameOver.until>now){
+    const w=gameOver.winners,names=w.length?w.join(" & "):"Nobody";
+    const tie=w.length>1;
+    b.style.display="flex";txt.classList.add("gameover");
+    txt.innerHTML="🏆 "+(tie?"WINNERS":"WINNER")+"<br>"+esc(names)+
+      (gameOver.prize?("<small>Pot: "+gameOver.prize+" $KABOOM"+(tie?" · split":"")+"</small>"):"");
+    return;
+  }
+  txt.classList.remove("gameover");
+  if(gameOver&&gameOver.until<=now)gameOver=null;
   if(state.ph==="roundover"){b.style.display="flex";txt.innerHTML=(state.win&&state.win!=="Draw"?(state.win+" wins!"):"Draw!")+"<small>Next round starting…</small>";}
   else if(state.players.length<2){b.style.display="flex";txt.innerHTML="Waiting for players…<small>Share the link so friends can join</small>";}
   else b.style.display="none";}
@@ -2067,6 +2089,7 @@ function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
     const bv=$("bal-val");if(bv)bv.textContent=myBal;
     const pv=$("pot-val");if(pv)pv.textContent=myPot;const ph=$("pot-hud");if(ph)ph.style.display=myPot>0?"":"none";
     const ah=$("ante-hud");if(ah)ah.textContent=(myWager&&!local)?(" · ANTE "+myAnte):"";
+    const rh=$("round-hud");if(rh){const showR=myWager&&!local&&state.gr>0;rh.style.display=showR?"":"none";if(showR){const rvv=$("round-val");if(rvv)rvv.textContent=state.gr+"/"+(state.gn||5);}}
     const ab=$("abil");if(ab){const me2=state.players.find(p=>p.id===myId);
       if(me2){let h="";const spd=Math.max(0,Math.round(((me2.sp||2.9)-2.9)/0.3));
         h+='<span>💣 <b>'+(me2.mb||1)+'</b></span>';            // bombs you can place
