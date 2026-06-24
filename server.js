@@ -27,6 +27,7 @@ const MAX_HP = 100;         // everyone starts each round at 100 HP
 const DMG_CORE = 100;       // blast damage on the bomb tile + tiles adjacent to it (instant kill)
 const DMG_EDGE = 50;        // blast damage further out along the arm (two hits to kill)
 const XP_KILL = 25, XP_WIN = 100, XP_CRATE = 2; // account-level XP rewards (loot pickups give no XP)
+const GAME_ROUNDS = 5;      // wager games are best-of: this many rounds per game before payout
 
 const store = require("./store");
 const auth = require("./auth");
@@ -233,6 +234,7 @@ function makeRoom(mapId, mode) {
     grid, seed: cfg.daily ? dailySeed() : ((Math.random() * 1e9) | 0),
     bombs: [], fires: [], ups: [], drops: [], destroyed: [], walls: [], events: [],
     players: new Map(), pot: 0,
+    gameRound: 1, roundWins: new Map(),
     phase: "playing", winner: "", bombId: 1, roundTimer: null,
     elapsed: 0, sudden: false, closeOrder: null, closeIdx: 0, pendingWalls: [], closeTimer: 0,
   };
@@ -776,7 +778,7 @@ function rateAllow(state, now, rate = 30, burst = 50) {
 }
 
 module.exports = {
-  TILE, FUSE, BLAST, START_BAL, DEATH_DROP, SUDDEN_AFTER, CLOSE_EVERY, POT_SHARE, MAX_HP, DMG_CORE, DMG_EDGE,
+  TILE, FUSE, BLAST, START_BAL, DEATH_DROP, SUDDEN_AFTER, CLOSE_EVERY, POT_SHARE, MAX_HP, DMG_CORE, DMG_EDGE, GAME_ROUNDS,
   KICK_STEP, INVULN_MS, BOUNTY_STEP, BOUNTY_MAX, MAPS, balances,
   bal, setBal, genGrid, latticeGrid, generateRoom, connected, spawns, clearSpawns, monument,
   makeRoom, newRound, addPlayer, movePlayer, buildCloseOrder, solidifyTile, stepClosing, dailySeed, roundAnte,
