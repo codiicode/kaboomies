@@ -16,7 +16,7 @@ function config() {
 // Credit a confirmed on-chain deposit to the sender's REAL balance, exactly once
 // per signature. Idempotent: a replay of the same sig is a no-op (returns false).
 function creditDeposit({ sig, fromWallet, amount }, store) {
-  if (!sig || !fromWallet || !(amount > 0)) return false;
+  if (!sig || !fromWallet || !Number.isSafeInteger(amount) || amount <= 0) return false;
   if (store.seenSig(sig)) return false;            // idempotent: already credited
   const cur = "real";
   store.setBalance(fromWallet, store.getBalance(fromWallet, 0, cur) + amount, null, cur);
@@ -242,6 +242,10 @@ async function defaultSendFn({ to, amount }) {
   const fromAta = await splToken.getOrCreateAssociatedTokenAccount(
     conn, treasuryKp, mintPk, treasuryKp.publicKey
   );
+  // Pre-check treasury balance so a shortfall rolls back cleanly (clear reason)
+  // instead of failing mid-transfer on-chain with a confusing error.
+  const treasuryBal = Number((fromAta.amount != null ? fromAta.amount : 0n).toString());
+  if (!(treasuryBal >= amount)) throw new Error("treasury_insufficient");
   const toAta = await splToken.getOrCreateAssociatedTokenAccount(
     conn, treasuryKp, mintPk, toPk
   );
