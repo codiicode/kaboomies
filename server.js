@@ -994,6 +994,8 @@ function startServer(port) {
         const list = [...(roomsByKey.get("play:" + id) || []), ...(roomsByKey.get("real:" + id) || [])];
         const players = list.reduce((a, r) => a + r.players.size, 0);
         return { id, name: MAPS[id].name, cols: MAPS[id].cols, rows: MAPS[id].rows, drop: MAPS[id].deathDrop,
+          buyIn: MAPS[id].buyIn != null ? MAPS[id].buyIn : null,
+          deathStake: MAPS[id].deathStake != null ? MAPS[id].deathStake : null,
           players, rooms: list.length, cap: MAX_PLAYERS, daily: !!MAPS[id].daily,
           seed: MAPS[id].daily ? dailySeed() : null };
       });

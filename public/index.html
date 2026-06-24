@@ -166,6 +166,16 @@
   .arena-card .stake{font-family:var(--display);font-size:16px;line-height:1.5;color:#b9821a;margin:16px 0 6px;}
   .arena-card .stake.free{color:var(--grey);}
   .arena-card .stake b{color:var(--ink);}
+  /* tier cards: Buy-in / Per-death rows for real-money arenas */
+  .arena-card .tiers{display:flex;flex-direction:column;gap:8px;margin:16px 0 6px;}
+  .arena-card .tier{display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+    border-bottom:2px dashed #e2e2e2;padding-bottom:5px;}
+  .arena-card .tier .tk{font-family:var(--body);font-size:18px;text-transform:uppercase;letter-spacing:.03em;color:var(--grey);}
+  .arena-card .tier .tv{font-family:var(--display);font-size:13px;color:#b9821a;}
+  .arena-card .tier .tv::after{content:" 🪙";font-family:var(--body);}
+  .arena-card.premium .tier{border-bottom-color:rgba(185,130,26,.3);}
+  .arena-card.premium .tier .tv{color:var(--gold-deep);text-shadow:1px 1px 0 rgba(245,166,35,.5);}
+  .arena-card.premium .tiers{position:relative;z-index:1;}
   /* ── premium: High Roller (gold / high-stakes) ── */
   .arena-card.premium{position:relative;overflow:hidden;border-color:var(--gold-deep);
     box-shadow:9px 9px 0 var(--gold-deep);
@@ -1503,9 +1513,15 @@ function renderArenas(maps){const host=$("arena-list");if(!host)return;host.inne
     card.className="arena-card"+(m.daily?" daily":"")+(m.drop>=1000?" premium":"");
     const look=m.daily&&typeof m.seed==="number"?themeFromSeed(m.seed).name:(m.name);
     // training is free (no token cost shown); real money shows the $KABOOM stakes
-    const stake=(selMode==="real"&&typeof m.drop==="number")
-      ? '<div class="stake">🪙 <b>±'+m.drop+'</b> $KABOOM · per kill/death</div>'
-      : '<div class="stake free">🎮 Free practice · no token cost</div>';
+    const fmt=n=>(typeof n==="number"?n.toLocaleString():n);
+    const stake=(selMode==="real"&&(typeof m.buyIn==="number"||typeof m.deathStake==="number"))
+      ? '<div class="tiers">'+
+          (typeof m.buyIn==="number"?'<div class="tier"><span class="tk">Buy-in</span><span class="tv">'+fmt(m.buyIn)+'</span></div>':'')+
+          (typeof m.deathStake==="number"?'<div class="tier"><span class="tk">Per-death</span><span class="tv">'+fmt(m.deathStake)+'</span></div>':'')+
+        '</div>'
+      : (selMode==="real"&&typeof m.drop==="number")
+        ? '<div class="stake">🪙 <b>±'+m.drop+'</b> $KABOOM · per kill/death</div>'
+        : '<div class="stake free">🎮 Free practice · no token cost</div>';
     card.innerHTML=(m.daily?'<span class="badge">★ DAILY</span><br>':'')+
       '<div class="an">'+(m.daily?look:m.name)+'</div>'+
       '<div class="ad">'+m.cols+'×'+m.rows+(m.daily?' · today’s seed':'')+'</div>'+
