@@ -59,3 +59,29 @@ test("parseIncoming returns null for unrelated mint or outbound transfer", () =>
   const other = custody._fakeTx({ sig: "S2", from: "walletA", to: "TREASURY_ATA", mint: "OTHER", amount: 10 });
   assert.strictEqual(custody.parseIncoming(other, { treasuryAta: "TREASURY_ATA", mint: "MINT" }), null);
 });
+
+test("withdraw debits first then sends, and is idempotent on idemKey", async () => {
+  store.setBalance("wd1", 20000, null, "real");
+  const sends = [];
+  const sendFn = async ({ to, amount }) => { sends.push({ to, amount }); return "TXSIG1"; };
+  const r1 = await custody.withdraw({ wallet: "wd1", amount: 5000, idemKey: "k1" }, store, sendFn);
+  assert.strictEqual(r1.ok, true);
+  assert.strictEqual(store.getBalance("wd1", 0, "real"), 15000);
+  assert.strictEqual(sends.length, 1);
+  const r2 = await custody.withdraw({ wallet: "wd1", amount: 5000, idemKey: "k1" }, store, sendFn); // replay
+  assert.strictEqual(sends.length, 1);                       // no second send
+  assert.strictEqual(store.getBalance("wd1", 0, "real"), 15000);
+});
+test("withdraw enforces min, max-per-tx, balance; rolls back on send failure", async () => {
+  const cfg = custody.config();
+  store.setBalance("wd2", cfg.MAX_PER_TX * 5, null, "real");
+  assert.strictEqual((await custody.withdraw({ wallet:"wd2", amount: cfg.MIN_WITHDRAW-1, idemKey:"a" }, store, async()=>"x")).ok, false);
+  assert.strictEqual((await custody.withdraw({ wallet:"wd2", amount: cfg.MAX_PER_TX+1, idemKey:"b" }, store, async()=>"x")).ok, false);
+  assert.strictEqual((await custody.withdraw({ wallet:"ghost", amount: cfg.MIN_WITHDRAW, idemKey:"c" }, store, async()=>"x")).ok, false); // no balance
+  const before = store.getBalance("wd2", 0, "real");
+  const failSend = async () => { throw new Error("rpc down"); };
+  const rb = await custody.withdraw({ wallet:"wd2", amount: cfg.MIN_WITHDRAW, idemKey:"d" }, store, failSend);
+  assert.strictEqual(rb.ok, false);
+  assert.strictEqual(rb.reason, "send_failed");
+  assert.strictEqual(store.getBalance("wd2", 0, "real"), before); // rolled back
+});

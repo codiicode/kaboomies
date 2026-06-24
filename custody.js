@@ -155,4 +155,93 @@ function startWatcher(store) {
   return timer;
 }
 
-module.exports = { enabled, config, creditDeposit, parseIncoming, _fakeTx, startWatcher };
+// ---- guarded withdraw (money LEAVES the treasury — the most safety-critical path) ----
+// Invariants enforced, in order: never send when PAUSED, over caps, or insufficient;
+// debit the player's REAL balance BEFORE sending; roll the debit back if the send
+// throws; never double-send on an idemKey replay. `sendFn` is injectable so tests
+// drive a fake; production lazily builds + signs the real SPL transfer.
+async function withdraw({ wallet, amount, idemKey }, store, sendFn) {
+  if (!sendFn) sendFn = defaultSendFn; // production: lazy real SPL transfer (not used in tests)
+  const cfg = config();
+  if (cfg.PAUSED) return { ok: false, reason: "paused" };
+
+  // ---- validation (cheap, before any state mutation) ----
+  if (!wallet) return { ok: false, reason: "invalid" };
+  if (!Number.isInteger(amount) || amount <= 0) return { ok: false, reason: "invalid" };
+  if (amount < cfg.MIN_WITHDRAW) return { ok: false, reason: "min" };
+  if (amount > cfg.MAX_PER_TX) return { ok: false, reason: "max" };
+
+  // ---- idempotency ----
+  // Mark the key seen AFTER validation passes but BEFORE debit/send, so a retry of
+  // an in-flight key can't double-spend. seenSig() returns true if already seen
+  // (this key already started/finished processing) and otherwise marks it + returns
+  // false. A replay therefore short-circuits without debiting or sending again.
+  const idemSlot = "wd:" + idemKey;
+  if (store.seenSig(idemSlot)) return { ok: true, replay: true };
+
+  // ---- daily cap ----
+  // Sum today's (UTC day) net "withdraw" activity for this wallet from the ledger:
+  // "withdraw" deltas are negative (debits) and "withdraw-rollback" deltas are
+  // positive (credit-backs of failed sends). Summing both gives the NET amount that
+  // actually left today; we add the requested amount and compare its magnitude to
+  // the cap. Rollbacks thus correctly offset their failed withdrawals.
+  const now = Date.now();
+  const dayStart = Date.UTC(
+    new Date(now).getUTCFullYear(),
+    new Date(now).getUTCMonth(),
+    new Date(now).getUTCDate()
+  );
+  let netToday = 0; // negative number: sum of today's withdraw + rollback deltas
+  for (const e of store.getLedger(wallet)) {
+    if (!e || typeof e.ts !== "number" || e.ts < dayStart) continue;
+    if (e.kind === "withdraw" || e.kind === "withdraw-rollback") netToday += e.delta;
+  }
+  const usedToday = Math.abs(netToday); // magnitude that left the treasury today
+  if (usedToday + amount > cfg.DAILY_CAP) return { ok: false, reason: "daily_cap" };
+
+  // ---- balance ----
+  const bal = store.getBalance(wallet, 0, "real");
+  if (!(bal >= amount)) return { ok: false, reason: "insufficient" };
+
+  // ---- DEBIT FIRST, then send ----
+  store.setBalance(wallet, bal - amount, null, "real");
+  store.ledger(wallet, -amount, "withdraw", "real");
+  try {
+    const sig = await sendFn({ to: wallet, amount });
+    return { ok: true, sig };
+  } catch (e) {
+    // ROLLBACK: re-credit using the current balance (avoid a stale `bal`).
+    const now2 = store.getBalance(wallet, 0, "real");
+    store.setBalance(wallet, now2 + amount, null, "real");
+    store.ledger(wallet, +amount, "withdraw-rollback", "real");
+    return { ok: false, reason: "send_failed" };
+  }
+}
+
+// Default production sender (NOT exercised by tests; only reached when no sendFn is
+// injected). Lazily builds + signs a real SPL transfer of `amount` base units of
+// KABOOM_MINT from the treasury to the recipient's ATA (creating it if missing),
+// sends and confirms, and returns the signature. No @solana import at module load.
+async function defaultSendFn({ to, amount }) {
+  const web3 = require("@solana/web3.js");
+  const splToken = require("@solana/spl-token");
+  const bs58 = require("bs58").default || require("bs58");
+
+  const conn = new web3.Connection(process.env.SOLANA_RPC, "confirmed");
+  const mintPk = new web3.PublicKey(process.env.KABOOM_MINT);
+  const treasuryKp = web3.Keypair.fromSecretKey(bs58.decode(process.env.TREASURY_SECRET));
+  const toPk = new web3.PublicKey(to);
+
+  const fromAta = await splToken.getOrCreateAssociatedTokenAccount(
+    conn, treasuryKp, mintPk, treasuryKp.publicKey
+  );
+  const toAta = await splToken.getOrCreateAssociatedTokenAccount(
+    conn, treasuryKp, mintPk, toPk
+  );
+  const sig = await splToken.transfer(
+    conn, treasuryKp, fromAta.address, toAta.address, treasuryKp.publicKey, amount
+  );
+  return sig;
+}
+
+module.exports = { enabled, config, creditDeposit, parseIncoming, _fakeTx, startWatcher, withdraw };
