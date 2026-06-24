@@ -77,7 +77,14 @@
 
   /* ---- PANEL / CREATE ---- */
   .panel{background:#fff;border:4px solid var(--ink);box-shadow:10px 10px 0 var(--ink);padding:26px;}
-  .panel-head{display:flex;align-items:center;gap:14px;margin-bottom:26px;}
+  .panel-head{display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin-bottom:26px;}
+  /* narrow screens: let the header action buttons (WALLET/PROFILE) wrap to their own
+     row instead of clipping the right edge, and shrink them slightly so they fit. */
+  @media (max-width:480px){
+    .panel-head{gap:10px;}
+    .panel-head>div{flex:1 1 60%;min-width:0;}        /* title shares row 1 with back */
+    .panel-head .wbtn{flex:1 1 40%;font-size:9px;padding:8px 8px 6px;} /* buttons wrap to row 2, side by side */
+  }
   .panel-head h2{font-family:var(--display);font-size:clamp(13px,3vw,19px);line-height:1.3;}
   .panel-head .sub{font-family:var(--body);font-size:18px;color:var(--grey);text-transform:uppercase;letter-spacing:.03em;margin-top:7px;}
   .back{font-family:var(--display);font-size:10px;color:#fff;background:var(--ink);padding:11px 12px 9px;border:3px solid var(--ink);box-shadow:4px 4px 0 var(--red);}
