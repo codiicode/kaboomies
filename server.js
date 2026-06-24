@@ -639,6 +639,13 @@ function roundAnte(room) {
   }
 }
 
+// sweep any uncollected loot drops back into the pot (wager games only)
+function sweepLoot(room) {
+  if (!isWagerGame(room)) return;
+  for (const d of room.drops) room.pot += d.a;
+  room.drops = [];
+}
+
 function maybeEndRound(room) {
   if (room.phase !== "playing") return;
   const list = [...room.players.values()];
@@ -808,7 +815,7 @@ module.exports = {
   KICK_STEP, INVULN_MS, BOUNTY_STEP, BOUNTY_MAX, MAPS, balances,
   bal, setBal, genGrid, latticeGrid, generateRoom, connected, spawns, clearSpawns, monument,
   makeRoom, newRound, addPlayer, movePlayer, buildCloseOrder, solidifyTile, stepClosing, dailySeed, roundAnte,
-  placeBomb, detonate, explode, settleDeath, chargeBuyIn, tick, snapshot, store, auth,
+  placeBomb, detonate, explode, settleDeath, chargeBuyIn, sweepLoot, tick, snapshot, store, auth,
   buildProfile, buildQuests, bumpQuest, characters,
   humanCount, isRanked, isWagerGame, botTarget, botWalkable, botBlastCells, botDangerSet,
   makeBot, syncBots, broadcast, rateAllow,

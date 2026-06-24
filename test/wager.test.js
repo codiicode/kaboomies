@@ -56,3 +56,13 @@ test("in a wager game, death drops the stake as loot (not a direct transfer)", (
   assert.strictEqual(s.bal("k", "real"), 0);           // killer did NOT get it directly
   assert.ok(room.drops.some(d => d.a === 1000));       // it's on the ground as loot
 });
+
+// --- W7: sweep uncollected loot into the pot ---
+test("uncollected loot is swept into the pot when swept", () => {
+  const room = s.makeRoom("brawl", "real");
+  s.addPlayer(room, { id: 1, key: "a", name: "A" }); s.addPlayer(room, { id: 2, key: "b", name: "B" });
+  room.pot = 5000; room.drops = [{ c: 3, r: 3, a: 700 }, { c: 4, r: 4, a: 300 }];
+  s.sweepLoot(room);
+  assert.strictEqual(room.pot, 6000);
+  assert.strictEqual(room.drops.length, 0);
+});
