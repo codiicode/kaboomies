@@ -10,3 +10,8 @@ test("a real-money room starts a game: round 1 of GAME_ROUNDS, empty round-wins"
   assert.strictEqual(room.roundWins instanceof Map, true);
   assert.strictEqual(room.roundWins.size, 0);
 });
+
+test("isWagerGame is true only for real-currency wager maps", () => {
+  assert.strictEqual(s.isWagerGame(s.makeRoom("brawl", "real")), true);
+  assert.strictEqual(s.isWagerGame(s.makeRoom("brawl", "play")), false);
+});

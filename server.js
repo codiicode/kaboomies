@@ -254,6 +254,11 @@ function newRound(room) {
   syncBots(room);
 }
 
+function isWagerGame(room) {
+  const cfg = MAPS[room.mapId];
+  return !!(room && room.cur === "real" && cfg && cfg.wager);
+}
+
 function pushEvent(room, ev) {
   room.events.push(ev);
   if (room.events.length > 12) room.events.shift();
@@ -784,7 +789,7 @@ module.exports = {
   makeRoom, newRound, addPlayer, movePlayer, buildCloseOrder, solidifyTile, stepClosing, dailySeed, roundAnte,
   placeBomb, detonate, explode, settleDeath, tick, snapshot, store, auth,
   buildProfile, buildQuests, bumpQuest, characters,
-  humanCount, isRanked, botTarget, botWalkable, botBlastCells, botDangerSet,
+  humanCount, isRanked, isWagerGame, botTarget, botWalkable, botBlastCells, botDangerSet,
   makeBot, syncBots, broadcast, rateAllow,
 };
 
