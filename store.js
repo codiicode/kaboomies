@@ -21,7 +21,7 @@ const SUPA_URL = process.env.SUPABASE_URL || "";
 const SUPA_KEY = process.env.SUPABASE_SERVICE_KEY || "";
 const useSupa = !!(SUPA_URL && SUPA_KEY);
 
-let mem = { balances: {}, wins: {}, names: {}, xp: {}, real: {}, stats: {}, streak: {}, quests: {} };
+let mem = { balances: {}, wins: {}, names: {}, xp: {}, real: {}, stats: {}, streak: {}, quests: {}, ledger: {} };
 let saveTimer = null;
 
 function loadFile() {
@@ -35,6 +35,7 @@ function loadFile() {
     mem.stats = j.stats || {};
     mem.streak = j.streak || {};
     mem.quests = j.quests || {};
+    mem.ledger = j.ledger || {};
   } catch (e) { /* fresh */ }
 }
 
@@ -161,5 +162,15 @@ function setQuestState(key, q) {
 function getWins(key) { return mem.wins[key] || 0; }
 function getName(key) { return mem.names[key] || null; }
 
+// ---- append-only audit ledger (real-money balance changes; for tracing/disputes) ----
+function ledger(key, delta, kind, cur) {
+  if (!key || !delta) return;
+  const arr = (mem.ledger[key] = mem.ledger[key] || []);
+  arr.push({ ts: Date.now(), delta, kind, cur: cur || "real" });
+  if (arr.length > 200) arr.splice(0, arr.length - 200); // cap
+  saveSoon();
+}
+function getLedger(key) { return (mem.ledger && mem.ledger[key]) || []; }
+
 module.exports = { init, getBalance, setBalance, bumpWin, topScores, getXp, addXp, levelFromXp, levelProgress, useSupa,
-  getStats, bumpStat, getStreak, setStreak, getQuestState, setQuestState, getWins, getName };
+  getStats, bumpStat, getStreak, setStreak, getQuestState, setQuestState, getWins, getName, ledger, getLedger };
