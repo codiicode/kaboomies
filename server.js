@@ -504,6 +504,7 @@ function buildProfile(key, name) {
   const st = store.getStreak(key);
   return {
     name: name || null,
+    balance: bal(key, "play"),
     level: prog.level, xp: { into: prog.into, need: prog.need },
     stats: {
       games: s.games, wins, winRate: s.games ? Math.round((wins / s.games) * 100) : 0,

@@ -1256,13 +1256,13 @@ function buildMapPicker(){const host=$("map-picker");if(!host)return;host.innerH
 
 /* ---------- wallet ($KABOOM) ---------- */
 const START_BAL=1000;
-let walletAddr=Store.get("bb_wallet")||null, guestChosen=false, activeSigner=null;
+let walletAddr=Store.get("bb_wallet")||null, guestChosen=false, activeSigner=null, myAccountBal=null;
 function shortAddr(a){return a?(a.slice(0,4)+"…"+a.slice(-4)):"Guest";}
 // Universal sign-in seam: any login method (wallet, Privy, …) calls this with a
 // Solana public key + a function that signs a Uint8Array message. Server-side
 // auth.verify is untouched — it just checks the ed25519 signature.
-function setIdentity(pubkey,signFn){walletAddr=pubkey;activeSigner=signFn;guestChosen=false;Store.set("bb_wallet",pubkey);updateWalletUI();}
-function clearIdentity(){walletAddr=null;activeSigner=null;Store.set("bb_wallet",null);}
+function setIdentity(pubkey,signFn){walletAddr=pubkey;activeSigner=signFn;guestChosen=false;Store.set("bb_wallet",pubkey);updateWalletUI();refreshAccountBalance();}
+function clearIdentity(){walletAddr=null;activeSigner=null;myAccountBal=null;Store.set("bb_wallet",null);}
 window.KABOOM_setIdentity=setIdentity;window.KABOOM_logout=()=>{clearIdentity();updateWalletUI();};
 function isMobileDev(){return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);}
 function getProvider(){
@@ -1300,10 +1300,25 @@ function updateWalletUI(){
   const pb=$("privy-btn"),gb=$("guest-btn"),loggedIn=!!walletAddr;
   if(pb)pb.style.display=(loggedIn||!PRIVY_APP_ID)?"none":"";   // hide login options once signed in
   if(gb)gb.style.display=loggedIn?"none":"";
-  if(loggedIn){info.innerHTML='✅ <b>SIGNED IN</b> &middot; '+shortAddr(walletAddr);btn.textContent="Log out";btn.onclick=disconnectWallet;btn.classList.add("ghost");}
+  if(loggedIn){
+    const balTxt=myAccountBal!=null?' &middot; 🪙 <b>'+Number(myAccountBal).toLocaleString()+'</b> $KABOOM':'';
+    info.innerHTML='✅ <b>SIGNED IN</b> &middot; <span id="wa-addr" title="'+walletAddr+'" style="cursor:pointer;border-bottom:1px dotted currentColor">'+shortAddr(walletAddr)+' ⧉</span>'+balTxt;
+    const wa=document.getElementById("wa-addr");if(wa)wa.onclick=()=>{try{navigator.clipboard.writeText(walletAddr);}catch(e){}const o=wa.innerHTML;wa.textContent="copied ✓";setTimeout(()=>{wa.innerHTML=o;},1200);};
+    btn.textContent="Log out";btn.onclick=disconnectWallet;btn.classList.add("ghost");
+  }
   else{info.innerHTML=guestChosen?'👤 <b>Playing as guest</b> &middot; progress won\u2019t be saved':'Not connected &middot; <b>play as guest</b>';btn.textContent="Connect Wallet";btn.onclick=connectWallet;btn.classList.remove("ghost");}
 }
 
+// fetch the signed-in account's $KABOOM balance (auth'd) and show it in the wallet bar
+async function refreshAccountBalance(){
+  if(!walletAddr) return;
+  try{
+    const auth=await signLogin(); if(!auth||!walletAddr) return;
+    const r=await fetch("/profile",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({wallet:walletAddr,auth})});
+    if(!r.ok) return; const p=await r.json();
+    if(typeof p.balance==="number"){ myAccountBal=p.balance; updateWalletUI(); }
+  }catch(e){}
+}
 /* ---------- Privy: email / social login + auto embedded Solana wallet ----------
    SETUP (see the chat handoff): create an app at dashboard.privy.io, turn on
    Solana embedded wallets + the login methods you want, add your domain to
