@@ -1344,14 +1344,26 @@ async function ensureSigner(){
   for(let i=0;i<24 && !activeSigner;i++) await new Promise(r=>setTimeout(r,150));
   return !!activeSigner;
 }
-// returning user: kick off signer restoration on load so signed actions (profile,
-// unlocks, verified joins) work after a reload without a manual reconnect.
-if(PRIVY_APP_ID && walletAddr) mountPrivy().catch(()=>{});
+// Warm the (heavy, CDN-loaded) Privy SDK in the background so clicking Email/Social opens
+// the modal instantly instead of triggering a multi-second load on the first click.
+// Returning users (have a wallet) preload immediately (also restores their signer);
+// everyone else preloads shortly after the page settles.
+if(PRIVY_APP_ID) setTimeout(()=>{ mountPrivy().catch(()=>{}); }, walletAddr ? 0 : 1500);
 async function loginWithPrivy(){
   if(!PRIVY_APP_ID){setWalletMsg("Email/social login needs a Privy App ID (see README).");return;}
-  try{setWalletMsg("Loading sign-in…");if(!_privyMethods)await mountPrivy();
-    if(_privyMethods&&_privyMethods.login)_privyMethods.login();else setWalletMsg("Sign-in not ready — try again.");}
-  catch(e){console.error("Privy:",e);setWalletMsg("Sign-in failed to load — check console & App ID.");}
+  setWalletMsg("Loading sign-in…");
+  try{
+    if(!_privyMethods){ // race the SDK load against a timeout so it can never hang silently
+      await Promise.race([ mountPrivy(), new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")), 25000)) ]);
+    }
+    if(_privyMethods && _privyMethods.login){ setWalletMsg(""); _privyMethods.login(); }
+    else { setWalletMsg("Sign-in didn’t finish loading — refresh and try again."); }
+  }catch(e){
+    console.error("Privy login error:", e);
+    setWalletMsg(e && e.message === "timeout"
+      ? "Sign-in is taking too long to load — check your connection and try again."
+      : "Sign-in failed to load — open the browser console (F12) and send me the error.");
+  }
 }
 
 function buildCustomizer(){
