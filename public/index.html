@@ -1256,13 +1256,13 @@ function buildMapPicker(){const host=$("map-picker");if(!host)return;host.innerH
 
 /* ---------- wallet ($KABOOM) ---------- */
 const START_BAL=1000;
-let walletAddr=Store.get("bb_wallet")||null, guestChosen=false, activeSigner=null, myAccountBal=null;
+let walletAddr=Store.get("bb_wallet")||null, guestChosen=false, activeSigner=null, myAccountBal=null, accountProfile=Store.get("bb_profile")||null;
 function shortAddr(a){return a?(a.slice(0,4)+"…"+a.slice(-4)):"Guest";}
 // Universal sign-in seam: any login method (wallet, Privy, …) calls this with a
 // Solana public key + a function that signs a Uint8Array message. Server-side
 // auth.verify is untouched — it just checks the ed25519 signature.
 function setIdentity(pubkey,signFn){walletAddr=pubkey;activeSigner=signFn;guestChosen=false;Store.set("bb_wallet",pubkey);updateWalletUI();refreshAccountBalance();}
-function clearIdentity(){walletAddr=null;activeSigner=null;myAccountBal=null;Store.set("bb_wallet",null);}
+function clearIdentity(){walletAddr=null;activeSigner=null;myAccountBal=null;accountProfile=null;Store.set("bb_wallet",null);Store.set("bb_profile",null);}
 window.KABOOM_setIdentity=setIdentity;window.KABOOM_logout=()=>{clearIdentity();updateWalletUI();};
 function isMobileDev(){return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);}
 function getProvider(){
@@ -1301,8 +1301,12 @@ function updateWalletUI(){
   if(pb)pb.style.display=(loggedIn||!PRIVY_APP_ID)?"none":"";   // hide login options once signed in
   if(gb)gb.style.display=loggedIn?"none":"";
   if(loggedIn){
+    const ap=accountProfile||{};
+    const av=(ap.avatar&&/^https:\/\//.test(ap.avatar))?'<img src="'+esc(ap.avatar)+'" alt="" style="width:20px;height:20px;border-radius:50%;border:2px solid var(--ink);vertical-align:middle;margin:0 6px -4px 0;object-fit:cover">':'';
+    const handle=ap.label?'<b>'+esc(ap.label)+'</b> &middot; ':'';
+    const lead=(av||handle)?(av+handle):'✅ <b>SIGNED IN</b> &middot; ';
     const balTxt=myAccountBal!=null?' &middot; 🪙 <b>'+Number(myAccountBal).toLocaleString()+'</b> $KABOOM':'';
-    info.innerHTML='✅ <b>SIGNED IN</b> &middot; <span id="wa-addr" title="'+walletAddr+'" style="cursor:pointer;border-bottom:1px dotted currentColor">'+shortAddr(walletAddr)+' ⧉</span>'+balTxt;
+    info.innerHTML=lead+'<span id="wa-addr" title="'+esc(walletAddr)+'" style="cursor:pointer;border-bottom:1px dotted currentColor">'+shortAddr(walletAddr)+' ⧉</span>'+balTxt;
     const wa=document.getElementById("wa-addr");if(wa)wa.onclick=()=>{try{navigator.clipboard.writeText(walletAddr);}catch(e){}const o=wa.innerHTML;wa.textContent="copied ✓";setTimeout(()=>{wa.innerHTML=o;},1200);};
     btn.textContent="Log out";btn.onclick=disconnectWallet;btn.classList.add("ghost");
   }
@@ -1318,6 +1322,17 @@ async function refreshAccountBalance(){
     if(!r.ok) return; const p=await r.json();
     if(typeof p.balance==="number"){ myAccountBal=p.balance; updateWalletUI(); }
   }catch(e){}
+}
+// derive a display identity (handle + avatar) from the Privy user's linked social account
+function privyDisplay(u){
+  if(!u) return null;
+  const t=u.twitter, fc=u.farcaster, d=u.discord, g=u.google, em=u.email;
+  if(t) return {label:t.username?("@"+t.username):(t.name||"X"), avatar:t.profilePictureUrl||null};
+  if(fc) return {label:fc.username?("@"+fc.username):(fc.displayName||"Farcaster"), avatar:fc.pfp||null};
+  if(d) return {label:(d.username||"Discord"), avatar:null};
+  if(g) return {label:(g.name||g.email||"Google"), avatar:null};
+  if(em) return {label:(em.address||"Email"), avatar:null};
+  return null;
 }
 /* ---------- Privy: email / social login + auto embedded Solana wallet ----------
    SETUP (see the chat handoff): create an app at dashboard.privy.io, turn on
@@ -1339,6 +1354,7 @@ async function mountPrivy(){
   function Bridge(){
     const p=usePrivy();const sw=useSolanaWallets?useSolanaWallets():{wallets:[]};const wallets=sw.wallets||[];
     React.useEffect(()=>{_privyMethods={login:p.login,logout:p.logout,authenticated:!!p.authenticated,hasWallet:!!wallets[0]};
+      if(p.authenticated&&p.user){const d=privyDisplay(p.user);if(d){accountProfile=d;try{Store.set("bb_profile",d);}catch(e){}if(walletAddr)updateWalletUI();}}
       if(p.authenticated&&wallets[0]){const w=wallets[0];
         setIdentity(w.address,async(m)=>{const r=await w.signMessage(m);return r&&r.signature?r.signature:r;});}
       else if(p.authenticated&&!wallets[0]&&sw&&sw.createWallet&&!_privyCreating){
@@ -1347,7 +1363,7 @@ async function mountPrivy(){
         _privyCreating=true;
         Promise.resolve(sw.createWallet()).catch(e=>console.error("Privy Solana createWallet failed — enable Solana embedded wallets in the Privy dashboard:",e)).finally(()=>{_privyCreating=false;});
       }
-    },[p.authenticated,wallets.length]);
+    },[p.authenticated,wallets.length,p.user]);
     return null;
   }
   createRoot(host).render(React.createElement(PrivyProvider,{appId:PRIVY_APP_ID,
