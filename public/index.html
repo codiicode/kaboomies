@@ -1294,11 +1294,13 @@ async function connectWallet(){
   setWalletMsg('No wallet detected. <a href="https://phantom.app/download" target="_blank" rel="noopener" style="color:#5a6bff;">Install Phantom</a> & reload — or just <b>play as guest</b>.');
 }
 function playGuest(){clearIdentity();guestChosen=true;updateWalletUI();}
-function disconnectWallet(){clearIdentity();updateWalletUI();}
+function disconnectWallet(){clearIdentity();guestChosen=false;if(_privyMethods&&_privyMethods.logout){try{_privyMethods.logout();}catch(e){}}updateWalletUI();}
 function updateWalletUI(){
   const info=$("wallet-info"),btn=$("wallet-btn");if(!info||!btn)return;
-  const pb=$("privy-btn");if(pb)pb.style.display=PRIVY_APP_ID?"":"none";
-  if(walletAddr){info.innerHTML='🪙 '+shortAddr(walletAddr)+' &middot; <b>signed in</b>';btn.textContent="Disconnect";btn.onclick=disconnectWallet;btn.classList.add("ghost");}
+  const pb=$("privy-btn"),gb=$("guest-btn"),loggedIn=!!walletAddr;
+  if(pb)pb.style.display=(loggedIn||!PRIVY_APP_ID)?"none":"";   // hide login options once signed in
+  if(gb)gb.style.display=loggedIn?"none":"";
+  if(loggedIn){info.innerHTML='✅ <b>SIGNED IN</b> &middot; '+shortAddr(walletAddr);btn.textContent="Log out";btn.onclick=disconnectWallet;btn.classList.add("ghost");}
   else{info.innerHTML=guestChosen?'👤 <b>Playing as guest</b> &middot; progress won\u2019t be saved':'Not connected &middot; <b>play as guest</b>';btn.textContent="Connect Wallet";btn.onclick=connectWallet;btn.classList.remove("ghost");}
 }
 
@@ -1308,7 +1310,7 @@ function updateWalletUI(){
    allowed origins, paste the App ID below, and serve over HTTPS. Until an App ID
    is set this whole block is inert and the button stays hidden. */
 const PRIVY_APP_ID = "cmqgh17v4006f0blaniphwsng"; // public client id — safe in frontend
-let _privyMethods=null, _privyMounting=false;
+let _privyMethods=null, _privyMounting=false, _privyCreating=false;
 async function mountPrivy(){
   if(_privyMethods||_privyMounting)return;_privyMounting=true;
   try{
@@ -1324,7 +1326,12 @@ async function mountPrivy(){
     React.useEffect(()=>{_privyMethods={login:p.login,logout:p.logout,authenticated:!!p.authenticated,hasWallet:!!wallets[0]};
       if(p.authenticated&&wallets[0]){const w=wallets[0];
         setIdentity(w.address,async(m)=>{const r=await w.signMessage(m);return r&&r.signature?r.signature:r;});}
-      else if(!p.authenticated&&walletAddr&&!guestChosen&&!(window.solana&&window.solana.isConnected)){/* privy logged out */}
+      else if(p.authenticated&&!wallets[0]&&sw&&sw.createWallet&&!_privyCreating){
+        // signed in (e.g. via X/email) but no Solana wallet yet -> provision an embedded one,
+        // then the wallets[] change re-runs this effect and setIdentity logs the game in.
+        _privyCreating=true;
+        Promise.resolve(sw.createWallet()).catch(e=>console.error("Privy Solana createWallet failed — enable Solana embedded wallets in the Privy dashboard:",e)).finally(()=>{_privyCreating=false;});
+      }
     },[p.authenticated,wallets.length]);
     return null;
   }
