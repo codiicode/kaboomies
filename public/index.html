@@ -1321,7 +1321,7 @@ async function mountPrivy(){
   const host=document.createElement("div");host.style.display="none";document.body.appendChild(host);
   function Bridge(){
     const p=usePrivy();const sw=useSolanaWallets?useSolanaWallets():{wallets:[]};const wallets=sw.wallets||[];
-    React.useEffect(()=>{_privyMethods={login:p.login,logout:p.logout};
+    React.useEffect(()=>{_privyMethods={login:p.login,logout:p.logout,authenticated:!!p.authenticated,hasWallet:!!wallets[0]};
       if(p.authenticated&&wallets[0]){const w=wallets[0];
         setIdentity(w.address,async(m)=>{const r=await w.signMessage(m);return r&&r.signature?r.signature:r;});}
       else if(!p.authenticated&&walletAddr&&!guestChosen&&!(window.solana&&window.solana.isConnected)){/* privy logged out */}
@@ -1356,8 +1356,18 @@ async function loginWithPrivy(){
     if(!_privyMethods){ // race the SDK load against a timeout so it can never hang silently
       await Promise.race([ mountPrivy(), new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")), 25000)) ]);
     }
-    if(_privyMethods && _privyMethods.login){ setWalletMsg(""); _privyMethods.login(); }
-    else { setWalletMsg("Sign-in didn’t finish loading — refresh and try again."); }
+    if(_privyMethods && _privyMethods.login){
+      // Deadlock guard: Privy may hold a stale session (authenticated) while the game has no
+      // signer (e.g. no Solana wallet was provisioned). Then login() no-ops ("already logged
+      // in") and nothing opens. Reset that session first, then open a fresh login.
+      if(_privyMethods.authenticated && !activeSigner){
+        setWalletMsg("Resetting previous session…");
+        try{ await _privyMethods.logout(); }catch(e){}
+        await new Promise(r=>setTimeout(r,400));
+      }
+      setWalletMsg("");
+      _privyMethods.login();
+    } else { setWalletMsg("Sign-in didn’t finish loading — refresh and try again."); }
   }catch(e){
     console.error("Privy login error:", e);
     setWalletMsg(e && e.message === "timeout"
