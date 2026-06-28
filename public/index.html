@@ -1849,7 +1849,7 @@ function connect(){
   const fb=setTimeout(()=>{if(!settled){settled=true;try{ws.close();}catch(_){}startLocal();}},1600);
   ws.onopen=()=>{settled=true;clearTimeout(fb);const name=($("nameInp").value||"Player").slice(0,14);ws.send(JSON.stringify({t:"join",name,base:playerSkin.base,skin:playerSkin.skin,clothes:playerSkin.clothes,map:selMap,mode:selMode,wallet:walletAddr,auth:pendingAuth}));};
   ws.onmessage=(ev)=>{const m=JSON.parse(ev.data);
-    if(m.t==="init"){myId=m.id;pred=null;rself=null;predBombs=[];predPicked.clear();COLS=m.COLS;ROWS=m.ROWS;TILE=m.TILE;W=m.W;H=m.H;FUSE=m.fuse;grid=m.grid;curMap=MAPS.find(x=>x.id===m.map)||MAPS[0];if(typeof m.bal==="number"){myBal=m.bal;prevBalForSfx=m.bal;}myPot=m.pot||0;verifiedWallet=!!m.verified;myWager=!!m.wager;myAnte=m.ante||0;
+    if(m.t==="init"){myId=m.id;pred=null;predBombs=[];predPicked.clear();COLS=m.COLS;ROWS=m.ROWS;TILE=m.TILE;W=m.W;H=m.H;FUSE=m.fuse;grid=m.grid;curMap=MAPS.find(x=>x.id===m.map)||MAPS[0];if(typeof m.bal==="number"){myBal=m.bal;prevBalForSfx=m.bal;}myPot=m.pot||0;verifiedWallet=!!m.verified;myWager=!!m.wager;myAnte=m.ante||0;
       if(typeof m.seed==="number"&&curMap.style!=="garden"){curPalette=paletteFromSeed(m.seed);curTheme=themeFromSeed(m.seed);}else{curPalette=null;curTheme=THEMES.classic;}updateArenaName();suddenOn=false;killfeed=[];bubbles={};snowFlakes=[];genCosmetics();
       CV.width=W;CV.height=H;connected=true;showScreen("game");
       const mb=$("mic-btn");if(mb)mb.style.display="";micState(""); // neutral until voice is actually enabled (click 🎙️ or hold V)
@@ -2072,7 +2072,7 @@ function bomb(){if(!local&&myCurse==="nobomb")return;sfx("place");if(local){if(m
    Correction toward the server is applied smoothly every frame and ONLY on an axis
    you're not actively driving, so steady running is never pulled back (no rubber-
    banding); a real desync (respawn/teleport) hard-snaps. */
-let pred=null, predMoving=false, srvX=0, srvY=0, rself=null, predIdle=0, myCurse=null; const PRED_TICK=1000/60;
+let pred=null, predMoving=false, srvX=0, srvY=0, predIdle=0, myCurse=null; const PRED_TICK=1000/60;
 /* ---------- action prediction: INSTANT bombs & loot pickup ----------
    Show your bomb the instant you press, and hide loot the instant you step on it,
    then let the authoritative server snapshot confirm. Timeouts undo anything the
@@ -2120,16 +2120,16 @@ function predTick(dt){if(!pred)return;const x0=pred.x,y0=pred.y;
   predMoving=Math.hypot(pred.x-x0,pred.y-y0)>0.12;
   if(predMoving||held.l||held.r||held.u||held.d)predIdle=0;else predIdle+=dt;} // track genuinely-stopped time
 function predReconcile(sx,sy,sp,alive,tp){
-  if(!pred||!alive||tp){pred={x:sx,y:sy,speed:sp||(pred&&pred.speed)||2.9};srvX=sx;srvY=sy;predMoving=false;predIdle=0;return;} // first spawn / server respawn|teleport -> snap (rself follows)
+  if(!pred||!alive||tp){pred={x:sx,y:sy,speed:sp||(pred&&pred.speed)||2.9};srvX=sx;srvY=sy;predMoving=false;predIdle=0;return;} // first spawn / server respawn|teleport -> snap (rendered directly)
   pred.speed=sp||pred.speed;srvX=sx;srvY=sy;
-  const ex=sx-pred.x, ey=sy-pred.y, BIG=TILE*1.5;
-  // No distance-based hard snap anymore (that snap WAS the self-teleport). Correct each axis smoothly:
-  //  - axis you're NOT driving: the server is authoritative and correcting it can't feel laggy -> converge firmly.
-  //  - axis you ARE driving: a healthy prediction *lead* under latency is correct, so leave it; only fix a genuine
-  //    desync (error grown past ~1.5 tiles, e.g. the server blocked you at a wall) and even then gently.
-  // These per-snapshot (30/s) nudges are absorbed by the per-frame rself render smoothing -> no visible jump.
-  pred.x += ex * ((held.l||held.r) ? (Math.abs(ex)>BIG?0.12:0) : 0.25);
-  pred.y += ey * ((held.u||held.d) ? (Math.abs(ey)>BIG?0.12:0) : 0.25);}
+  // INSTANT feel: trust prediction completely during normal play. The server always runs ~latency
+  // behind, so its position is a bit stale — pulling toward it would drag you backward when you stop
+  // (= the "glide"). So correct ONLY a genuine desync (off by ~0.9+ tile: wall block, shove, packet
+  // gap), and converge quickly rather than snap. Auto-centering keeps the perpendicular axis aligned,
+  // and pred stops the instant you release a key, so this gives clean start/stop with no drift.
+  const ex=sx-pred.x, ey=sy-pred.y, BIG=TILE*0.9;
+  if(Math.abs(ex)>BIG) pred.x += ex*0.25;
+  if(Math.abs(ey)>BIG) pred.y += ey*0.25;}
 /* ---------- remote-player interpolation (Valve/Source style) ----------
    Render other players ~INTERP_DELAY ms in the past and linearly interpolate
    between the two buffered snapshots that bracket that render time. Constant
@@ -2259,10 +2259,7 @@ function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
     if(!local)predActionTick();
     const rtime=now-INTERP_DELAY;
     for(const e of ents){const rp=e.rp;let rx,ry;
-      if(!local&&e.id===myId&&pred){                                 // you: prediction = instant target, lightly smoothed render (absorbs net jitter/snaps -> no "jumping")
-        if(!rself||Math.hypot(pred.x-rself.x,pred.y-rself.y)>TILE*2){rself={x:pred.x,y:pred.y};}
-        else{const s=1-Math.pow(0.6,dt/16.67);rself.x+=(pred.x-rself.x)*s;rself.y+=(pred.y-rself.y)*s;}
-        rx=rself.x;ry=rself.y;}
+      if(!local&&e.id===myId&&pred){ rx=pred.x;ry=pred.y; }            // you: render prediction DIRECTLY — instant start/stop, zero glide
       else if(!local){const ip=interpAt(rp.buf,rtime);rx=ip?ip.x:rp.tx;ry=ip?ip.y:rp.ty;} // others: buffered interpolation (smooth)
       else{rx=rp.tx;ry=rp.ty;}                                        // local offline sim (already 60Hz)
       const ddx=rx-rp.x,ddy=ry-rp.y;rp.x=rx;rp.y=ry;
