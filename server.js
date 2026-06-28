@@ -31,11 +31,11 @@ const GAME_ROUNDS = 5;      // wager games are best-of: this many rounds per gam
 // Touch a clean player to pass it on (hot-potato) and cure yourself. One curse at a time,
 // per-round, never touches balances. Speed curses report through effSpeed so the client's
 // prediction auto-syncs; reverse/nobomb are mirrored client-side from the snapshot `cu`. ---
-const CURSE_MS = 9000, CURSE_IMMUNE_MS = 700, CURSE_AUTOBOMB_MS = 340;
+const CURSE_MS = 9000, CURSE_IMMUNE_MS = 700;
 const HYPER_MULT = 1.9, SLOW_MULT = 0.5;
-const CURSES = ["reverse", "hyper", "slow", "nobomb", "diarrhea", "shortflame"];
+const CURSES = ["reverse", "hyper", "slow", "nobomb", "shortflame"];
 function effSpeed(p) { return p.curse === "hyper" ? p.speed * HYPER_MULT : p.curse === "slow" ? p.speed * SLOW_MULT : p.speed; }
-function applyCurse(room, pl, type) { pl.curse = type; pl.curseT = CURSE_MS; pl.curseImmune = CURSE_IMMUNE_MS; pl.autoBombT = CURSE_AUTOBOMB_MS; pushEvent(room, { k: "curse", who: pl.name, type }); }
+function applyCurse(room, pl, type) { pl.curse = type; pl.curseT = CURSE_MS; pl.curseImmune = CURSE_IMMUNE_MS; pushEvent(room, { k: "curse", who: pl.name, type }); }
 
 const store = require("./store");
 const auth = require("./auth");
@@ -324,7 +324,7 @@ function resetPlayer(p, s) {
   p.maxHp = MAX_HP; p.hp = MAX_HP; p.hitBlasts = new Set();
   p.ignore = new Set(); p.in = {};
   p.tp = true; // signal the owning client to hard-snap its prediction here (respawn/teleport), not glide
-  p.curse = null; p.curseT = 0; p.curseImmune = 0; p.autoBombT = 0;
+  p.curse = null; p.curseT = 0; p.curseImmune = 0;
   p.ai = { tc: Math.round((p.x - TILE/2)/TILE), tr: Math.round((p.y - TILE/2)/TILE), flee: false };
 }
 
@@ -579,7 +579,7 @@ function tick(room, dt) {
   if (room.phase === "playing") for (const p of room.players.values()) if (p.bot && p.alive && p.ai) botThink(room, p);
   if (room.phase === "playing") for (const pl of room.players.values()) movePlayer(room, pl);
 
-  // skull curses: count down, auto-drop bombs for "diarrhea", and pass on contact (hot-potato)
+  // skull curses: count down, and pass on contact (hot-potato)
   if (room.phase === "playing") {
     const alive = [...room.players.values()].filter(p => p.alive);
     for (const pl of alive) {
@@ -587,14 +587,13 @@ function tick(room, dt) {
       if (!pl.curse) continue;
       pl.curseT -= dt;
       if (pl.curseT <= 0) { pl.curse = null; pl.curseT = 0; continue; }
-      if (pl.curse === "diarrhea") { pl.autoBombT -= dt; if (pl.autoBombT <= 0) { placeBomb(room, pl); pl.autoBombT = CURSE_AUTOBOMB_MS; } }
     }
     for (const a of alive) {
       if (!a.curse || a.curseImmune > 0) continue;
       for (const b of alive) {
         if (b === a || b.curse || b.curseImmune > 0) continue;
         if (Math.abs(a.x - b.x) < TILE * 0.72 && Math.abs(a.y - b.y) < TILE * 0.72) {
-          b.curse = a.curse; b.curseT = a.curseT; b.curseImmune = CURSE_IMMUNE_MS; b.autoBombT = CURSE_AUTOBOMB_MS;
+          b.curse = a.curse; b.curseT = a.curseT; b.curseImmune = CURSE_IMMUNE_MS;
           a.curse = null; a.curseT = 0; a.curseImmune = CURSE_IMMUNE_MS;  // giver is cured (hot-potato)
           pushEvent(room, { k: "curse", who: b.name, type: b.curse });
           break;

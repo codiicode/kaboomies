@@ -407,7 +407,7 @@
           <details><summary>What is KABOOMIES?</summary><p>A fast, last-kaboomie-standing arena battle. Bomb your rivals, grab power-ups, and be the last one breathing. Up to 8 players per map.</p></details>
           <details><summary>How do I play?</summary><p>Desktop: move with <b>WASD</b> or the <b>arrow keys</b>, drop a bomb with <b>Space</b>. Mobile: use the on-screen <b>d-pad</b> and bomb button. Blow up crates for power-ups and take out everyone else.</p></details>
           <details><summary>Is it free?</summary><p>Yes — <b>Training</b> mode is free practice with play-money chips, no cost. Real-money <b>$KABOOM</b> arenas are coming soon.</p></details>
-          <details><summary>What do the power-ups do?</summary><p>Blow up crates to grab loot: 💣 <b>more bombs</b> · 🔥 <b>bigger blasts</b> · 👟 <b>speed</b>. Watch out for the 💀 <b>skull</b> — it hits you with a random temporary <b>curse</b> (reversed controls, hyper-speed, can’t place bombs, auto-dropping bombs, or a tiny blast). You can pass a curse to a rival by <b>touching them</b> — which cures you. Your current loadout is shown at the top of the screen.</p></details>
+          <details><summary>What do the power-ups do?</summary><p>Blow up crates to grab loot: 💣 <b>more bombs</b> · 🔥 <b>bigger blasts</b> · 👟 <b>speed</b>. Watch out for the 💀 <b>skull</b> — it hits you with a random temporary <b>curse</b> (reversed controls, hyper-speed, can’t place bombs, or a tiny blast). You can pass a curse to a rival by <b>touching them</b> — which cures you. Your current loadout is shown at the top of the screen.</p></details>
           <details><summary>How do levels &amp; XP work?</summary><p>Earn XP from kills (25), wins (100) and crates (2), plus daily quests and login streaks. Levels are <b>prestige only</b> — they never boost combat power — and help unlock characters.</p></details>
           <details><summary>How do I unlock characters?</summary><p>Play games, rack up wins and kills, break crates and level up. Each locked skin shows exactly what it needs.</p></details>
           <details><summary>Is there voice chat?</summary><p>Yes. Desktop: <b>hold V</b> to talk (push-to-talk). Mobile: tap the 🎙️ button to talk hands-free, tap again to mute.</p></details>
@@ -1813,7 +1813,7 @@ function applyEvent(e){
   else if(e.k==="draw"){pushFeed("— draw —");}
   else if(e.k==="emote"){bubbles[e.id]={e:e.e,until:performance.now()+2200};sfx("emote");}
   else if(e.k==="levelup"){pushFeed("⭐ "+e.who+" reached Lv "+e.lvl,"win");sfx("win");}
-  else if(e.k==="curse"){const cm={reverse:"reversed controls",hyper:"hyper speed",slow:"slowed",nobomb:"can’t bomb",diarrhea:"bomb diarrhea",shortflame:"tiny flame"};pushFeed("💀 "+e.who+" cursed — "+(cm[e.type]||"cursed"));sfx("emote");}
+  else if(e.k==="curse"){const cm={reverse:"reversed controls",hyper:"hyper speed",slow:"slowed",nobomb:"can’t bomb",shortflame:"tiny flame"};pushFeed("💀 "+e.who+" cursed — "+(cm[e.type]||"cursed"));sfx("emote");}
   else if(e.k==="gameover"){
     const winners=Array.isArray(e.winners)?e.winners:(e.winners?[e.winners]:[]);
     gameOver={winners,prize:+e.prize||0,until:performance.now()+6000};
@@ -2287,7 +2287,7 @@ function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
       if(rp.mh){const bw=TILE*0.8,bh=5,bx=rp.x-bw/2,by=gy+12,ratio=Math.max(0,Math.min(1,(rp.hp==null?rp.mh:rp.hp)/rp.mh));
         ctx.fillStyle="rgba(0,0,0,.5)";rr(bx-1.5,by-1.5,bw+3,bh+3,3);ctx.fill();
         ctx.fillStyle=ratio>0.5?"#43d17f":ratio>0.25?"#ffd23f":"#ff3b30";rr(bx,by,Math.max(0,bw*ratio),bh,2);ctx.fill();}
-      if(rp.cu&&rp.alive){const cy=gy-22,lbl=({reverse:"REVERSED",hyper:"HYPER",slow:"SLOW",nobomb:"NO BOMB",diarrhea:"DIARRHEA",shortflame:"TINY FLAME"})[rp.cu]||"CURSED";
+      if(rp.cu&&rp.alive){const cy=gy-22,lbl=({reverse:"REVERSED",hyper:"HYPER",slow:"SLOW",nobomb:"NO BOMB",shortflame:"TINY FLAME"})[rp.cu]||"CURSED";
         ctx.font="16px serif";ctx.fillStyle="#fff";ctx.fillText("💀",rp.x,cy-1+Math.sin(now/200+rp.x)*1.5);
         ctx.font="bold 9px 'VT323',monospace";ctx.lineWidth=3;ctx.strokeStyle="rgba(0,0,0,.65)";ctx.strokeText(lbl,rp.x,cy+12);ctx.fillStyle="#b6f58c";ctx.fillText(lbl,rp.x,cy+12);}
       const bub=bubbles[e.id];if(bub&&bub.until>now){const by=rp.y-TILE*0.92;
