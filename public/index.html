@@ -359,7 +359,7 @@
   #fire:active{transform:translate(5px,5px);box-shadow:none}
   @media (hover:none) and (pointer:coarse){#touch.on{display:block}}
   /* phones: hand more of the screen to the board */
-  @media (hover:none) and (pointer:coarse){#screen-game.active{padding-top:calc(60px + env(safe-area-inset-top))}}
+  @media (hover:none) and (pointer:coarse){#screen-game.active{align-items:center;padding:calc(54px + env(safe-area-inset-top)) 6px 6px}}
   /* portrait phones: the arenas are wide, so ask the player to rotate to landscape */
   #rotate-lock{position:fixed;inset:0;z-index:70;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;text-align:center;padding:32px;
     background:#fff;background-image:linear-gradient(#ededed 1px,transparent 1px),linear-gradient(90deg,#ededed 1px,transparent 1px);background-size:26px 26px;}
@@ -2172,7 +2172,15 @@ window.addEventListener("keyup",e=>{const k=e.key.toLowerCase();
 
 /* ---------- layout ---------- */
 const _coarse=matchMedia("(hover:none) and (pointer:coarse)").matches;
-function fitCanvas(){const TOPB=_coarse?60:96;const availW=window.innerWidth,availH=window.innerHeight-TOPB;let s=availW/W;if(H*s>availH+TILE*1.1)s=(availH+TILE*1.1)/H;CV.style.width=(W*s)+"px";CV.style.height=(H*s)+"px";}
+function fitCanvas(){
+  // fit the WHOLE arena inside the available space (no overflow/clipping), with a small margin
+  const TOPB=_coarse?56:96;
+  const padX=_coarse?6:0, padBottom=_coarse?6:0;
+  const availW=Math.max(80,window.innerWidth-padX*2);
+  const availH=Math.max(80,window.innerHeight-TOPB-padBottom);
+  const s=Math.min(availW/W, availH/H);
+  CV.style.width=(W*s)+"px";CV.style.height=(H*s)+"px";
+}
 window.addEventListener("resize",()=>{if(currentScreen==="game")fitCanvas();});
 window.addEventListener("orientationchange",()=>{if(currentScreen==="game")setTimeout(fitCanvas,250);});
 
