@@ -359,7 +359,14 @@
   #fire:active{transform:translate(5px,5px);box-shadow:none}
   @media (hover:none) and (pointer:coarse){#touch.on{display:block}}
   /* phones: hand more of the screen to the board */
-  @media (hover:none) and (pointer:coarse){#screen-game.active{align-items:center;padding:calc(54px + env(safe-area-inset-top)) 6px 6px}}
+  @media (hover:none) and (pointer:coarse){#screen-game.active{align-items:center;padding:calc(50px + env(safe-area-inset-top)) 6px 6px}}
+  /* mobile: keep the top bar a thin strip so it never covers the arena — hide map name + scoreboard */
+  @media (hover:none) and (pointer:coarse){
+    #topbar{padding:5px 12px;padding-right:calc(92px + env(safe-area-inset-right));align-items:center}
+    #topbar>#arena-name,#topbar>#score-left,#topbar>#score-right{display:none!important}
+    #bal-hud{font-size:15px} #bal-hud b{font-size:10px}
+    #status{font-size:12px;max-width:38%}
+  }
   /* portrait phones: the arenas are wide, so ask the player to rotate to landscape */
   #rotate-lock{position:fixed;inset:0;z-index:70;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;text-align:center;padding:32px;
     background:#fff;background-image:linear-gradient(#ededed 1px,transparent 1px),linear-gradient(90deg,#ededed 1px,transparent 1px);background-size:26px 26px;}
