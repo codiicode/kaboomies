@@ -1649,8 +1649,15 @@ $("mic-btn").onclick=async ()=>{
   if(!voiceOn){ await enableVoice(); if(voiceOn){ talk(true); setStatus("🎙️ Mic ON — talk hands-free, tap to mute"); } return; }
   talk(!pttHeld); setStatus(pttHeld?"🎙️ Mic ON — tap to mute":"🎙️ Mic muted — tap to talk");
 };
-window.addEventListener("keydown",e=>{ if(e.repeat)return;const tag=(e.target&&e.target.tagName)||"";if(tag==="INPUT"||tag==="TEXTAREA")return;if(e.code==="KeyV")talk(true); });
-window.addEventListener("keyup",e=>{ if(e.code==="KeyV")talk(false); });
+// Hold V to talk. The FIRST press also turns voice on (and asks for mic permission), so
+// it "just works" without having to click the 🎙️ button first. vKeyDown tracks the physical
+// key so we don't un-mute after release if the async mic prompt resolved late.
+let vKeyDown=false;
+window.addEventListener("keydown",async e=>{ if(e.repeat)return;const tag=(e.target&&e.target.tagName)||"";if(tag==="INPUT"||tag==="TEXTAREA")return;if(e.code!=="KeyV")return;
+  vKeyDown=true;
+  if(!voiceOn){ await enableVoice(); }
+  if(vKeyDown)talk(true); });
+window.addEventListener("keyup",e=>{ if(e.code==="KeyV"){vKeyDown=false;talk(false);} });
 (function(){const p=$("ptt-btn");if(!p)return;
   const on=e=>{e.preventDefault();talk(true);},off=e=>{e.preventDefault();talk(false);};
   p.addEventListener("pointerdown",on);p.addEventListener("pointerup",off);p.addEventListener("pointerleave",off);p.addEventListener("pointercancel",off);})();
@@ -1880,7 +1887,7 @@ function connect(){
     if(m.t==="init"){myId=m.id;pred=null;rself=null;predBombs=[];predPicked.clear();COLS=m.COLS;ROWS=m.ROWS;TILE=m.TILE;W=m.W;H=m.H;FUSE=m.fuse;grid=m.grid;curMap=MAPS.find(x=>x.id===m.map)||MAPS[0];if(typeof m.bal==="number"){myBal=m.bal;prevBalForSfx=m.bal;}myPot=m.pot||0;verifiedWallet=!!m.verified;myWager=!!m.wager;myAnte=m.ante||0;
       if(typeof m.seed==="number"&&curMap.style!=="garden"){curPalette=paletteFromSeed(m.seed);curTheme=themeFromSeed(m.seed);}else{curPalette=null;curTheme=THEMES.classic;}updateArenaName();suddenOn=false;killfeed=[];bubbles={};snowFlakes=[];genCosmetics();
       CV.width=W;CV.height=H;connected=true;showScreen("game");
-      const mb=$("mic-btn");if(mb)mb.style.display="";micState("on");
+      const mb=$("mic-btn");if(mb)mb.style.display="";micState(""); // neutral until voice is actually enabled (click 🎙️ or hold V)
       if(m.streak&&m.streak.xpAwarded>0)pushFeed("🔥 Day "+m.streak.count+" streak +"+m.streak.xpAwarded+" XP","win");
     } else if(m.t==="blocked"){try{ws.close();}catch(_){}connected=false;
       const n=$("mode-note");
