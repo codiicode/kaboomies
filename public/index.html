@@ -1362,10 +1362,15 @@ function privyDisplay(u){
    allowed origins, paste the App ID below, and serve over HTTPS. Until an App ID
    is set this whole block is inert and the button stays hidden. */
 const PRIVY_APP_ID = "cmqgh17v4006f0blaniphwsng"; // public client id — safe in frontend
-let _privyMethods=null, _privyMounting=false, _privyCreating=false;
-async function mountPrivy(){
-  if(_privyMethods||_privyMounting)return;_privyMounting=true;
-  try{
+let _privyMethods=null, _privyMountPromise=null, _privyCreating=false;
+// Load + mount the Privy SDK once. Returns a SHARED promise so a click that lands while
+// the background preload is still in flight WAITS for that same load to finish, instead of
+// getting a silent no-op (the old bug: "click does nothing" on a fresh/cold machine). Resets
+// on failure so a later attempt can retry from scratch.
+function mountPrivy(){
+  if(_privyMethods) return Promise.resolve();
+  if(_privyMountPromise) return _privyMountPromise;
+  _privyMountPromise=(async()=>{
   const [{default:React},{createRoot},Privy]=await Promise.all([
     import("https://esm.sh/react@18"),
     import("https://esm.sh/react-dom@18/client"),
@@ -1392,7 +1397,8 @@ async function mountPrivy(){
     config:{embeddedWallets:{createOnLogin:"users-without-wallets"}, loginMethods:["email","google","twitter","discord","apple"]}},
     React.createElement(Bridge,null)));
   await new Promise(r=>setTimeout(r,500));
-  } finally { _privyMounting=false; }
+  })().catch(e=>{ _privyMountPromise=null; throw e; });
+  return _privyMountPromise;
 }
 // After a reload, walletAddr is restored from storage but activeSigner is NOT (it is
 // only set live by the wallet provider). Re-mount Privy so its restored session
