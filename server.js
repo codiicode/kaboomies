@@ -180,13 +180,13 @@ function generateRoom(cols, rows, density) {
   const sp = spawns(cols, rows);
   for (let a = 0; a < 20; a++) {
     const g = genGrid(cols, rows, density);
-    clearSpawns(g, cols, rows, sp);
     monument(g, cols, rows);
+    clearSpawns(g, cols, rows, sp);   // clear AFTER monument so it can't re-block a spawn
     if (connected(g, cols, rows, sp)) return g;
   }
   const g = latticeGrid(cols, rows, density); // guaranteed-connected fallback
-  clearSpawns(g, cols, rows, sp);
   monument(g, cols, rows);
+  clearSpawns(g, cols, rows, sp);
   return g;
 }
 
@@ -210,10 +210,13 @@ function spawns(cols, rows) {
 
 function clearSpawns(grid, cols, rows, sp) {
   for (const s of sp) {
-    if (s.c > 0 && s.r > 0 && s.c < cols - 1 && s.r < rows - 1) grid[s.r][s.c] = 0;
-    const cells = [[s.c + 1, s.r], [s.c - 1, s.r], [s.c, s.r + 1], [s.c, s.r - 1]];
+    // Open the spawn tile + its whole orthogonal ring — clearing BOTH crates and stray
+    // indestructible walls. This guarantees every spawn has at least an L of open tiles
+    // (a vertical + a horizontal exit), so you can always step out and bomb-and-retreat
+    // safely instead of being boxed in and forced to suicide.
+    const cells = [[s.c, s.r], [s.c + 1, s.r], [s.c - 1, s.r], [s.c, s.r + 1], [s.c, s.r - 1]];
     for (const [c, r] of cells)
-      if (c > 0 && r > 0 && c < cols - 1 && r < rows - 1 && grid[r][c] === 2) grid[r][c] = 0;
+      if (c > 0 && r > 0 && c < cols - 1 && r < rows - 1) grid[r][c] = 0;
   }
 }
 
