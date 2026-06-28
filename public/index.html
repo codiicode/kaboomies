@@ -9,6 +9,17 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="KABOOMIES" />
+<meta name="description" content="KABOOMIES — real-time multiplayer Bomberman-style arena. Bomb your rivals, grab power-ups, be the last kaboomie standing. Free to play." />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="KABOOMIES" />
+<meta property="og:title" content="KABOOMIES — last kaboomie standing takes the pot" />
+<meta property="og:description" content="Real-time multiplayer Bomberman-style arena. Bomb your rivals, grab power-ups, survive. Free to play. Every kill pays." />
+<meta property="og:url" content="https://kaboomies.fun/" />
+<meta property="og:image" content="https://kaboomies.fun/logo.png" />
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:title" content="KABOOMIES — last kaboomie standing takes the pot" />
+<meta name="twitter:description" content="Real-time multiplayer Bomberman-style arena. Free to play. Every kill pays." />
+<meta name="twitter:image" content="https://kaboomies.fun/logo.png" />
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -57,6 +68,9 @@
   .faq details[open] summary{border-bottom:3px solid var(--ink);}
   .faq p{font-family:var(--body);font-size:17px;line-height:1.45;color:#333;padding:12px 14px;margin:0;}
   .faq p b{color:var(--ink);}
+  .legal{margin-top:12px;font-family:var(--body);font-size:14px;letter-spacing:.04em;}
+  .legal a{color:var(--grey);text-decoration:none;border-bottom:1px dotted var(--grey);}
+  .legal a:hover{color:var(--ink);}
   .arena{position:relative;z-index:4;width:min(560px,98%);height:150px;margin:0 auto 30px;}
   .ground{position:absolute;left:0;right:0;bottom:22px;height:9px;background:var(--ink);}
   .ground::after{content:"";position:absolute;left:0;right:0;top:9px;height:7px;background:repeating-linear-gradient(90deg,var(--ink) 0 10px,transparent 10px 20px);}
@@ -394,6 +408,7 @@
           <details><summary>Do I need a crypto wallet?</summary><p>No — you can play as a guest. Log in with a Solana wallet to save your stats, level and characters, and earn XP from daily quests.</p></details>
         </section>
         <div class="domain">KABOOMIES.FUN</div>
+        <div class="legal"><a href="/terms.html">Terms of Service</a> &middot; <a href="/privacy.html">Privacy Policy</a></div>
       </div>
     </div>
   </section>

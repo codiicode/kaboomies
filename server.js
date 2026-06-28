@@ -496,6 +496,20 @@ function buildQuests(key, today) {
   }));
 }
 
+// Sanitize a player-chosen name for a public game: strip control chars, cap length,
+// and reject names containing slurs (leet-normalized match) -> fall back to "Player".
+const NAME_BLOCK = ["nigger","nigga","faggot","retard","kike","spic","chink","tranny","rape","rapist","pedo","cunt","whore","coon","beaner","wetback","slut"];
+function cleanName(raw) {
+  let s = String(raw == null ? "" : raw);
+  s = s.split("").filter(c => c.charCodeAt(0) >= 32).join("").replace(/\s+/g, " ").trim().slice(0, 14);
+  if (!s) return "Player";
+  const norm = s.toLowerCase()
+    .replace(/[1!|]/g, "i").replace(/3/g, "e").replace(/0/g, "o").replace(/[4@]/g, "a")
+    .replace(/[5$]/g, "s").replace(/7/g, "t").replace(/[^a-z]/g, "");
+  for (const w of NAME_BLOCK) if (norm.includes(w)) return "Player";
+  return s;
+}
+
 function buildProfile(key, name) {
   const today = quests.dayIndex(Date.now());
   const prog = store.levelProgress(store.getXp(key));
@@ -902,7 +916,7 @@ function startServer(port) {
   let nextId = 1;
 
   const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css",
-    ".png": "image/png", ".jpg": "image/jpeg", ".ico": "image/x-icon", ".json": "application/json" };
+    ".png": "image/png", ".jpg": "image/jpeg", ".ico": "image/x-icon", ".json": "application/json", ".svg": "image/svg+xml" };
   const server = http.createServer((req, res) => {
     if (req.method === "POST" && (req.url || "").split("?")[0] === "/profile") {
       let body = "", aborted = false;
@@ -1055,7 +1069,7 @@ function startServer(port) {
         const allowedBase = characters.isUnlocked(m.base, ustats) ? m.base : characters.DEFAULT_BASE;
         player = {
           id, ws, key, wallet: verified ? m.wallet : null, verified, voice: false,
-          name: String(m.name == null ? "Player" : m.name).slice(0, 14),
+          name: cleanName(m.name),
           base: allowedBase, skin: m.skin || "#e8b07a", clothes: m.clothes || "#7d8aa0",
         };
         addPlayer(room, player);
