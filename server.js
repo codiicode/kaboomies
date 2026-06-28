@@ -19,8 +19,6 @@ const CLOSE_EVERY = 10000;  // (legacy, unused — closing is now a telegraphed 
 const CLOSE_STEP = 300;     // ms between telegraphing each single tile (one at a time, outside-in spiral)
 const WARN_MS = 1300;       // telegraph time: a tile flashes this long before it turns into a wall
 const POT_SHARE = 0.4;      // fraction of each death-drop that feeds the round pot
-const KICK_STEP = 70;       // ms per tile while a kicked bomb slides
-const INVULN_MS = 1200;     // i-frames granted by a shield save
 const BOUNTY_STEP = 30;     // extra $KABOOM dropped per kill in a streak
 const BOUNTY_MAX = 240;     // cap on bounty bonus
 const MAX_HP = 100;         // everyone starts each round at 100 HP
@@ -322,7 +320,7 @@ function resetPlayer(p, s) {
   p.y = s.r * TILE + TILE / 2;
   p.alive = true;
   p.maxBombs = 1; p.range = 2; p.speed = SPEED_BASE;
-  p.kick = false; p.remote = false; p.pierce = false; p.shield = 0; p.vuln = 0; p.streak = 0; p.anted = false;
+  p.streak = 0; p.anted = false;
   p.maxHp = MAX_HP; p.hp = MAX_HP; p.hitBlasts = new Set();
   p.ignore = new Set(); p.in = {};
   p.tp = true; // signal the owning client to hard-snap its prediction here (respawn/teleport), not glide
@@ -395,20 +393,6 @@ function movePlayer(room, pl) {
     if (!overlap) pl.ignore.delete(id);
   }
   const pc = Math.round((pl.x - TILE / 2) / TILE), pr = Math.round((pl.y - TILE / 2) / TILE);
-  // kick: if holding a direction into a bomb and you have kick, send it sliding
-  if (pl.kick) {
-    const kdx = (pl.in.r ? 1 : 0) - (pl.in.l ? 1 : 0), kdy = (pl.in.d ? 1 : 0) - (pl.in.u ? 1 : 0);
-    let ddc = 0, ddr = 0;
-    if (Math.abs(kdx) > Math.abs(kdy)) ddc = Math.sign(kdx); else if (kdy) ddr = Math.sign(kdy);
-    if (ddc || ddr) {
-      const b = room.bombs.find(x => x.col === pc + ddc && x.row === pr + ddr && !x.kicking);
-      if (b) {
-        const nc = b.col + ddc, nr = b.row + ddr;
-        if (!solidTile(room, nc, nr) && !room.bombs.some(o => o !== b && o.col === nc && o.row === nr))
-          { b.kicking = true; b.kdc = ddc; b.kdr = ddr; b.kt = KICK_STEP; }
-      }
-    }
-  }
   // powerups
   for (let i = room.ups.length - 1; i >= 0; i--) {
     if (room.ups[i].c === pc && room.ups[i].r === pr) {
@@ -416,10 +400,6 @@ function movePlayer(room, pl) {
       if (k === "bomb") pl.maxBombs = Math.min(6, pl.maxBombs + 1);
       else if (k === "fire") pl.range = Math.min(8, pl.range + 1);
       else if (k === "speed") pl.speed = Math.min(SPEED_CAP, pl.speed + SPEED_STEP);
-      else if (k === "kick") pl.kick = true;
-      else if (k === "remote") pl.remote = true;
-      else if (k === "pierce") pl.pierce = true;
-      else if (k === "shield") pl.shield = Math.min(3, pl.shield + 1);
       else if (k === "skull") applyCurse(room, pl, CURSES[Math.floor(Math.random() * CURSES.length)]);
       if (k !== "skull" && isRanked(room)) { store.bumpStat(pl.key, "pickups"); bumpQuest(room, pl, "pickups"); }
     }
@@ -442,14 +422,9 @@ function placeBomb(room, pl) {
   if (room.grid[row][col] !== 0) return;
   if (room.bombs.some(b => b.col === col && b.row === row)) return;
   if (room.bombs.filter(b => b.owner === pl.id).length >= pl.maxBombs) return;
-  const b = { id: room.bombId++, col, row, owner: pl.id, t: pl.remote ? 8000 : FUSE, range: pl.curse === "shortflame" ? 1 : pl.range, pierce: !!pl.pierce, remote: !!pl.remote };
+  const b = { id: room.bombId++, col, row, owner: pl.id, t: FUSE, range: pl.curse === "shortflame" ? 1 : pl.range };
   room.bombs.push(b);
   pl.ignore.add(b.id);
-}
-
-// detonate all of a player's remote bombs
-function detonate(room, pl) {
-  for (const b of room.bombs) if (b.owner === pl.id && b.remote && b.t > 0) b.t = 1;
 }
 
 function explode(room, b) {
@@ -474,8 +449,7 @@ function explode(room, b) {
           const pool = ["bomb", "bomb", "fire", "fire", "speed", "speed", "skull", "skull"]; // ~25% of drops are a risky skull
           newUps.push({ c, r, k: pool[Math.floor(Math.random() * pool.length)] });
         }
-        if (!b.pierce) break; // pierce blasts continue through crates
-        continue;
+        break; // a crate absorbs the rest of the blast arm
       }
       const ob = room.bombs.find(x => x.col === c && x.row === r && x !== b);
       if (ob && ob.t > 0) ob.t = 0;
@@ -604,7 +578,6 @@ function settleDeath(room, victim, killer) {
 function tick(room, dt) {
   if (room.phase === "playing") for (const p of room.players.values()) if (p.bot && p.alive && p.ai) botThink(room, p);
   if (room.phase === "playing") for (const pl of room.players.values()) movePlayer(room, pl);
-  for (const pl of room.players.values()) if (pl.vuln > 0) pl.vuln = Math.max(0, pl.vuln - dt);
 
   // skull curses: count down, auto-drop bombs for "diarrhea", and pass on contact (hot-potato)
   if (room.phase === "playing") {
@@ -630,19 +603,6 @@ function tick(room, dt) {
     }
   }
 
-  // kicked bombs slide one tile at a time until blocked
-  for (const b of room.bombs) {
-    if (!b.kicking) continue;
-    b.kt -= dt;
-    if (b.kt > 0) continue;
-    const nc = b.col + b.kdc, nr = b.row + b.kdr;
-    const blocked = solidTile(room, nc, nr)
-      || room.bombs.some(o => o !== b && o.col === nc && o.row === nr)
-      || [...room.players.values()].some(p => p.alive && Math.round((p.x - TILE / 2) / TILE) === nc && Math.round((p.y - TILE / 2) / TILE) === nr);
-    if (blocked) { b.kicking = false; }
-    else { b.col = nc; b.row = nr; b.kt = KICK_STEP; }
-  }
-
   for (const b of room.bombs) b.t -= dt;
   const going = room.bombs.filter(b => b.t <= 0);
   if (going.length) {
@@ -659,13 +619,12 @@ function tick(room, dt) {
     const fmap = new Map();
     for (const f of room.fires) { const k = f.c + "," + f.r; const ex = fmap.get(k); if (!ex || f.dmg > ex.dmg) fmap.set(k, f); }
     for (const pl of room.players.values()) {
-      if (!pl.alive || pl.vuln > 0) continue;
+      if (!pl.alive) continue;
       const c = Math.round((pl.x - TILE / 2) / TILE), r = Math.round((pl.y - TILE / 2) / TILE);
       const f = fmap.get(c + "," + r);
       if (!f || pl.hitBlasts.has(f.bid)) continue; // each blast damages a given player at most once
       pl.hitBlasts.add(f.bid);
       const killer = room.players.get(f.owner);
-      if (pl.shield > 0) { pl.shield--; pl.vuln = INVULN_MS; pushEvent(room, { k: "shield", who: pl.name }); continue; }
       pl.hp -= f.dmg;
       if (pl.hp > 0) { pushEvent(room, { k: "hurt", who: pl.name, dmg: f.dmg }); continue; }
       pl.hp = 0; pl.alive = false;
@@ -773,7 +732,7 @@ function snapshot(room) {
     players.push({ id: p.id, n: p.name, x: Math.round(p.x), y: Math.round(p.y),
       b: p.base, s: p.skin, cl: p.clothes, a: p.alive, w: p.wins, bal: bal(p.key, room.cur),
       hp: Math.max(0, Math.round(p.hp)), mh: p.maxHp || MAX_HP, lvl: store.levelFromXp(store.getXp(p.key)),
-      kk: !!p.kick, rm: !!p.remote, pi: !!p.pierce, sh: p.shield || 0, iv: p.vuln > 0 ? 1 : 0, st: p.streak || 0,
+      st: p.streak || 0,
       sp: effSpeed(p), mb: p.maxBombs, nb: room.bombs.filter(b => b.owner === p.id).length, rg: p.range,
       tp: p.tp ? 1 : 0, cu: p.curse || 0 });
     p.tp = false; // one-shot: only the first snapshot after a respawn/teleport tells the client to hard-snap
@@ -781,7 +740,7 @@ function snapshot(room) {
   return {
     t: "s",
     players,
-    bombs: room.bombs.map(b => ({ c: b.col, r: b.row, f: Math.max(0, b.t / FUSE), rm: !!b.remote })),
+    bombs: room.bombs.map(b => ({ c: b.col, r: b.row, f: Math.max(0, b.t / FUSE) })),
     fires: room.fires.map(f => ({ c: f.c, r: f.r })),
     ups: room.ups.map(u => ({ c: u.c, r: u.r, k: u.k })),
     drops: room.drops.map(d => ({ c: d.c, r: d.r, a: d.a })),
@@ -917,10 +876,10 @@ async function handleWithdraw(body) {
 
 module.exports = {
   TILE, FUSE, BLAST, START_BAL, DEATH_DROP, SUDDEN_AFTER, CLOSE_EVERY, POT_SHARE, MAX_HP, DMG_CORE, DMG_EDGE, GAME_ROUNDS,
-  KICK_STEP, INVULN_MS, BOUNTY_STEP, BOUNTY_MAX, MAPS, balances,
+  BOUNTY_STEP, BOUNTY_MAX, MAPS, balances,
   bal, setBal, genGrid, latticeGrid, generateRoom, connected, spawns, clearSpawns, monument,
   makeRoom, newRound, addPlayer, movePlayer, buildCloseOrder, solidifyTile, stepClosing, dailySeed, roundAnte,
-  placeBomb, detonate, explode, settleDeath, chargeBuyIn, sweepLoot, endGame, startGame, tick, snapshot, store, auth,
+  placeBomb, explode, settleDeath, chargeBuyIn, sweepLoot, endGame, startGame, tick, snapshot, store, auth,
   buildProfile, buildQuests, bumpQuest, characters,
   humanCount, isRanked, isWagerGame, botTarget, botWalkable, botBlastCells, botDangerSet,
   makeBot, syncBots, broadcast, rateAllow, custody, handleWithdraw,
@@ -1139,8 +1098,6 @@ function startServer(port) {
         player.in = { u: !!m.u, d: !!m.d, l: !!m.l, r: !!m.r };
       } else if (m.t === "bomb") {
         placeBomb(room, player);
-      } else if (m.t === "det") {
-        detonate(room, player);
       } else if (m.t === "emote") {
         const e = String(m.e || "").slice(0, 4);
         if (e) pushEvent(room, { k: "emote", id: player.id, who: player.name, e });
