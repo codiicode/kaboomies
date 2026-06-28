@@ -385,6 +385,16 @@ function movePlayer(room, pl) {
       if (Math.abs(ce - pl.x) > 1 && canBe(room, nx, ny, pl)) { pl.y = ny; pl.x = nx; }
     }
   }
+  // Lane auto-centering: while moving straight on one axis, glide toward the perpendicular
+  // lane center (capped at one step) so you slot cleanly into gaps and round corners. Mirrored
+  // verbatim in the client predictor (predStep) so prediction never fights the server.
+  if (dx && !dy) {
+    const ce = Math.round((pl.y - TILE / 2) / TILE) * TILE + TILE / 2, d = ce - pl.y;
+    if (d) { const st = Math.sign(d) * Math.min(sp, Math.abs(d)); if (canBe(room, pl.x, pl.y + st, pl)) pl.y += st; }
+  } else if (dy && !dx) {
+    const ce = Math.round((pl.x - TILE / 2) / TILE) * TILE + TILE / 2, d = ce - pl.x;
+    if (d) { const st = Math.sign(d) * Math.min(sp, Math.abs(d)); if (canBe(room, pl.x + st, pl.y, pl)) pl.x += st; }
+  }
   for (const id of [...pl.ignore]) {
     const b = room.bombs.find(bb => bb.id === id);
     if (!b) { pl.ignore.delete(id); continue; }

@@ -1953,6 +1953,8 @@ function moveL(pl){if(!pl.alive)return;let dx=(pl.in.r?1:0)-(pl.in.l?1:0),dy=(pl
   if(dx&&dy){dx*=0.7071;dy*=0.7071;}const sp=pl.speed;
   if(dx){const nx=pl.x+dx*sp;if(canBeL(nx,pl.y,pl))pl.x=nx;else{const ce=Math.round((pl.y-TILE/2)/TILE)*TILE+TILE/2;const ny=pl.y+Math.sign(ce-pl.y)*Math.min(sp,Math.abs(ce-pl.y));if(Math.abs(ce-pl.y)>1&&canBeL(nx,ny,pl)){pl.x=nx;pl.y=ny;}}}
   if(dy){const ny=pl.y+dy*sp;if(canBeL(pl.x,ny,pl))pl.y=ny;else{const ce=Math.round((pl.x-TILE/2)/TILE)*TILE+TILE/2;const nx=pl.x+Math.sign(ce-pl.x)*Math.min(sp,Math.abs(ce-pl.x));if(Math.abs(ce-pl.x)>1&&canBeL(nx,ny,pl)){pl.y=ny;pl.x=nx;}}}
+  if(dx&&!dy){const ce=Math.round((pl.y-TILE/2)/TILE)*TILE+TILE/2,d=ce-pl.y;if(d){const st=Math.sign(d)*Math.min(sp,Math.abs(d));if(canBeL(pl.x,pl.y+st,pl))pl.y+=st;}}
+  else if(dy&&!dx){const ce=Math.round((pl.x-TILE/2)/TILE)*TILE+TILE/2,d=ce-pl.x;if(d){const st=Math.sign(d)*Math.min(sp,Math.abs(d));if(canBeL(pl.x+st,pl.y,pl))pl.x+=st;}}
   for(const id of [...pl.ignore]){const b=bombsL.find(bb=>bb.id===id);if(!b){pl.ignore.delete(id);continue;}
     const tx0=b.col*TILE,tx1=tx0+TILE,ty0=b.row*TILE,ty1=ty0+TILE,HB=HBL();
     if(!(pl.x+HB>tx0&&pl.x-HB<tx1&&pl.y+HB>ty0&&pl.y-HB<ty1))pl.ignore.delete(id);}
@@ -2109,6 +2111,9 @@ function predStep(sc){ // advance movement by `sc` server-ticks worth (sc may be
   if(dx&&dy){dx*=0.7071;dy*=0.7071;}const sp=pred.speed*sc;
   if(dx){const nx=pred.x+dx*sp;if(predCanBe(nx,pred.y,ign))pred.x=nx;else{const ce=Math.round((pred.y-TILE/2)/TILE)*TILE+TILE/2;const ny=pred.y+Math.sign(ce-pred.y)*Math.min(sp,Math.abs(ce-pred.y));if(Math.abs(ce-pred.y)>1&&predCanBe(nx,ny,ign)){pred.x=nx;pred.y=ny;}}}
   if(dy){const ny=pred.y+dy*sp;if(predCanBe(pred.x,ny,ign))pred.y=ny;else{const ce=Math.round((pred.x-TILE/2)/TILE)*TILE+TILE/2;const nx=pred.x+Math.sign(ce-pred.x)*Math.min(sp,Math.abs(ce-pred.x));if(Math.abs(ce-pred.x)>1&&predCanBe(nx,ny,ign)){pred.y=ny;pred.x=nx;}}}
+  // lane auto-centering — mirrors server movePlayer EXACTLY so prediction never desyncs
+  if(dx&&!dy){const ce=Math.round((pred.y-TILE/2)/TILE)*TILE+TILE/2,d=ce-pred.y;if(d){const st=Math.sign(d)*Math.min(sp,Math.abs(d));if(predCanBe(pred.x,pred.y+st,ign))pred.y+=st;}}
+  else if(dy&&!dx){const ce=Math.round((pred.x-TILE/2)/TILE)*TILE+TILE/2,d=ce-pred.x;if(d){const st=Math.sign(d)*Math.min(sp,Math.abs(d));if(predCanBe(pred.x+st,pred.y,ign))pred.x+=st;}}
 }
 function predTick(dt){if(!pred)return;const x0=pred.x,y0=pred.y;
   predStep(Math.min(3.5,dt/PRED_TICK)); // PURE prediction while moving -> no corrections, nothing that can "jump"
