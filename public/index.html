@@ -1377,7 +1377,11 @@ function mountPrivy(){
     import("https://esm.sh/@privy-io/react-auth@1?deps=react@18,react-dom@18"),
   ]);
   const {PrivyProvider,usePrivy,useSolanaWallets}=Privy;
-  const host=document.createElement("div");host.style.display="none";document.body.appendChild(host);
+  // IMPORTANT: do NOT set display:none here. Privy renders its login modal inside this
+  // provider subtree, so a hidden host hides the modal too — first-time sign-in then opens
+  // nothing (returning users worked only because their session restores without a modal).
+  // The host itself is empty (Bridge renders null), so it's a 0-size, invisible container.
+  const host=document.createElement("div");host.id="privy-host";document.body.appendChild(host);
   function Bridge(){
     const p=usePrivy();const sw=useSolanaWallets?useSolanaWallets():{wallets:[]};const wallets=sw.wallets||[];
     React.useEffect(()=>{_privyMethods={login:p.login,logout:p.logout,authenticated:!!p.authenticated,hasWallet:!!wallets[0]};
@@ -1432,7 +1436,8 @@ async function loginWithPrivy(){
         await new Promise(r=>setTimeout(r,400));
       }
       setWalletMsg("");
-      _privyMethods.login();
+      try{ await Promise.resolve(_privyMethods.login()); }
+      catch(err){ console.error("Privy login() failed:", err); setWalletMsg("Couldn’t open sign-in — open the console (F12) and send me the error."); }
     } else { setWalletMsg("Sign-in didn’t finish loading — refresh and try again."); }
   }catch(e){
     console.error("Privy login error:", e);
