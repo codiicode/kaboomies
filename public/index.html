@@ -1924,7 +1924,7 @@ function syncPlayers(){
     rp.buf.push({t:nowT,x:p.x,y:p.y});
     while(rp.buf.length>2&&rp.buf[0].t<nowT-600)rp.buf.shift();
     rp.tx=p.x;rp.ty=p.y;rp.base=p.b;rp.skin=p.s;rp.clothes=p.cl;rp.alive=p.a;rp.name=p.n;rp.wins=p.w;rp.hp=p.hp;rp.mh=p.mh;rp.lvl=p.lvl;
-    if(!local&&p.id===myId)predReconcile(p.x,p.y,p.sp,p.a);}
+    if(!local&&p.id===myId)predReconcile(p.x,p.y,p.sp,p.a,p.tp);}
   for(const id in rpos)if(!ids.has(+id))delete rpos[id];
 }
 
@@ -2160,13 +2160,17 @@ function predTick(dt){if(!pred)return;const x0=pred.x,y0=pred.y;
   predStep(Math.min(3.5,dt/PRED_TICK)); // PURE prediction while moving -> no corrections, nothing that can "jump"
   predMoving=Math.hypot(pred.x-x0,pred.y-y0)>0.12;
   if(predMoving||held.l||held.r||held.u||held.d)predIdle=0;else predIdle+=dt;} // track genuinely-stopped time
-function predReconcile(sx,sy,sp,alive){
-  if(!pred||!alive){pred={x:sx,y:sy,speed:sp||2.9};srvX=sx;srvY=sy;predMoving=false;predIdle=0;return;}
+function predReconcile(sx,sy,sp,alive,tp){
+  if(!pred||!alive||tp){pred={x:sx,y:sy,speed:sp||(pred&&pred.speed)||2.9};srvX=sx;srvY=sy;predMoving=false;predIdle=0;return;} // first spawn / server respawn|teleport -> snap (rself follows)
   pred.speed=sp||pred.speed;srvX=sx;srvY=sy;
-  if(Math.hypot(sx-pred.x,sy-pred.y)>TILE*2.5){pred.x=sx;pred.y=sy;return;} // gross desync (respawn/teleport) only -> snap (rself smooths it)
-  // converge to the server ONLY after you've genuinely been still >180ms — never during play or brief
-  // direction-change key gaps, so real network lag can't yank you backward mid-movement
-  if(predIdle>180&&!(held.l||held.r||held.u||held.d)){pred.x+=(sx-pred.x)*0.12;pred.y+=(sy-pred.y)*0.12;}}
+  const ex=sx-pred.x, ey=sy-pred.y, BIG=TILE*1.5;
+  // No distance-based hard snap anymore (that snap WAS the self-teleport). Correct each axis smoothly:
+  //  - axis you're NOT driving: the server is authoritative and correcting it can't feel laggy -> converge firmly.
+  //  - axis you ARE driving: a healthy prediction *lead* under latency is correct, so leave it; only fix a genuine
+  //    desync (error grown past ~1.5 tiles, e.g. the server blocked you at a wall) and even then gently.
+  // These per-snapshot (30/s) nudges are absorbed by the per-frame rself render smoothing -> no visible jump.
+  pred.x += ex * ((held.l||held.r) ? (Math.abs(ex)>BIG?0.12:0) : 0.25);
+  pred.y += ey * ((held.u||held.d) ? (Math.abs(ey)>BIG?0.12:0) : 0.25);}
 /* ---------- remote-player interpolation (Valve/Source style) ----------
    Render other players ~INTERP_DELAY ms in the past and linearly interpolate
    between the two buffered snapshots that bracket that render time. Constant

@@ -315,6 +315,7 @@ function resetPlayer(p, s) {
   p.kick = false; p.remote = false; p.pierce = false; p.shield = 0; p.vuln = 0; p.streak = 0; p.anted = false;
   p.maxHp = MAX_HP; p.hp = MAX_HP; p.hitBlasts = new Set();
   p.ignore = new Set(); p.in = {};
+  p.tp = true; // signal the owning client to hard-snap its prediction here (respawn/teleport), not glide
   p.ai = { tc: Math.round((p.x - TILE/2)/TILE), tr: Math.round((p.y - TILE/2)/TILE), flee: false };
 }
 
@@ -730,12 +731,15 @@ function maybeEndRound(room) {
 
 function snapshot(room) {
   const players = [];
-  for (const p of room.players.values())
+  for (const p of room.players.values()) {
     players.push({ id: p.id, n: p.name, x: Math.round(p.x), y: Math.round(p.y),
       b: p.base, s: p.skin, cl: p.clothes, a: p.alive, w: p.wins, bal: bal(p.key, room.cur),
       hp: Math.max(0, Math.round(p.hp)), mh: p.maxHp || MAX_HP, lvl: store.levelFromXp(store.getXp(p.key)),
       kk: !!p.kick, rm: !!p.remote, pi: !!p.pierce, sh: p.shield || 0, iv: p.vuln > 0 ? 1 : 0, st: p.streak || 0,
-      sp: p.speed, mb: p.maxBombs, nb: room.bombs.filter(b => b.owner === p.id).length, rg: p.range });
+      sp: p.speed, mb: p.maxBombs, nb: room.bombs.filter(b => b.owner === p.id).length, rg: p.range,
+      tp: p.tp ? 1 : 0 });
+    p.tp = false; // one-shot: only the first snapshot after a respawn/teleport tells the client to hard-snap
+  }
   return {
     t: "s",
     players,
@@ -1133,9 +1137,21 @@ function startServer(port) {
     });
   });
 
+  // Drift-compensated sim loop: advance each room by however many fixed TICK steps real
+  // wall-clock time actually elapsed (carrying the sub-tick remainder), capped to avoid a
+  // spiral after a long GC/pause. Keeps the true 60/s sim rate under event-loop jitter, so
+  // clients (which predict in real time) don't drift ahead of the server and get yanked back.
+  let _lastTick = Date.now(), _acc = 0;
   const tickTimer = setInterval(() => {
+    const now = Date.now();
+    _acc += now - _lastTick; _lastTick = now;
+    if (_acc > 250) _acc = 250;                 // cap catch-up (~15 steps) — never spiral
+    let steps = 0;
+    while (_acc >= TICK && steps < 15) {
+      for (const room of allRooms()) tick(room, TICK);
+      _acc -= TICK; steps++;
+    }
     for (const room of allRooms()) {
-      tick(room, TICK);
       if (room.phase === "roundover" && !room.roundTimer) {
         room.roundTimer = setTimeout(() => { room.roundTimer = null; newRound(room);
           broadcast(room, { t: "round", grid: room.grid, win: "", seed: room.seed });
