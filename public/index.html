@@ -2127,7 +2127,9 @@ function predReconcile(sx,sy,sp,alive,tp){
   // (= the "glide"). So correct ONLY a genuine desync (off by ~0.9+ tile: wall block, shove, packet
   // gap), and converge quickly rather than snap. Auto-centering keeps the perpendicular axis aligned,
   // and pred stops the instant you release a key, so this gives clean start/stop with no drift.
-  const ex=sx-pred.x, ey=sy-pred.y, BIG=TILE*0.9;
+  // Threshold scales with speed: your healthy prediction lead under ping is (speed x latency),
+  // so a fixed cap trips constantly at hyper-speed (1.9x) and judders. ~14 ticks of lead tolerance.
+  const ex=sx-pred.x, ey=sy-pred.y, BIG=Math.max(TILE*0.9, pred.speed*14);
   if(Math.abs(ex)>BIG) pred.x += ex*0.25;
   if(Math.abs(ey)>BIG) pred.y += ey*0.25;}
 /* ---------- remote-player interpolation (Valve/Source style) ----------
