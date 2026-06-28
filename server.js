@@ -29,6 +29,16 @@ const DMG_EDGE = 50;        // blast damage further out along the arm (two hits 
 const XP_KILL = 25, XP_WIN = 100, XP_CRATE = 2; // account-level XP rewards (loot pickups give no XP)
 const GAME_ROUNDS = 5;      // wager games are best-of: this many rounds per game before payout
 
+// --- Skull curses (Atomic-Bomberman style): grab the skull -> a random temporary curse.
+// Touch a clean player to pass it on (hot-potato) and cure yourself. One curse at a time,
+// per-round, never touches balances. Speed curses report through effSpeed so the client's
+// prediction auto-syncs; reverse/nobomb are mirrored client-side from the snapshot `cu`. ---
+const CURSE_MS = 9000, CURSE_IMMUNE_MS = 700, CURSE_AUTOBOMB_MS = 340;
+const HYPER_MULT = 1.9, SLOW_MULT = 0.5;
+const CURSES = ["reverse", "hyper", "slow", "nobomb", "diarrhea", "shortflame"];
+function effSpeed(p) { return p.curse === "hyper" ? p.speed * HYPER_MULT : p.curse === "slow" ? p.speed * SLOW_MULT : p.speed; }
+function applyCurse(room, pl, type) { pl.curse = type; pl.curseT = CURSE_MS; pl.curseImmune = CURSE_IMMUNE_MS; pl.autoBombT = CURSE_AUTOBOMB_MS; pushEvent(room, { k: "curse", who: pl.name, type }); }
+
 const store = require("./store");
 const auth = require("./auth");
 const quests = require("./quests");
@@ -316,6 +326,7 @@ function resetPlayer(p, s) {
   p.maxHp = MAX_HP; p.hp = MAX_HP; p.hitBlasts = new Set();
   p.ignore = new Set(); p.in = {};
   p.tp = true; // signal the owning client to hard-snap its prediction here (respawn/teleport), not glide
+  p.curse = null; p.curseT = 0; p.curseImmune = 0; p.autoBombT = 0;
   p.ai = { tc: Math.round((p.x - TILE/2)/TILE), tr: Math.round((p.y - TILE/2)/TILE), flee: false };
 }
 
@@ -355,8 +366,9 @@ function movePlayer(room, pl) {
   if (!pl.alive) return;
   let dx = (pl.in.r ? 1 : 0) - (pl.in.l ? 1 : 0);
   let dy = (pl.in.d ? 1 : 0) - (pl.in.u ? 1 : 0);
+  if (pl.curse === "reverse") { dx = -dx; dy = -dy; }   // cursed: controls flipped (mirrored client-side too)
   if (dx && dy) { dx *= 0.7071; dy *= 0.7071; }
-  const sp = pl.speed;
+  const sp = effSpeed(pl);                              // hyper/slow curses scale here AND in the snapshot
   if (dx) {
     const nx = pl.x + dx * sp;
     if (canBe(room, nx, pl.y, pl)) pl.x = nx;
@@ -408,7 +420,8 @@ function movePlayer(room, pl) {
       else if (k === "remote") pl.remote = true;
       else if (k === "pierce") pl.pierce = true;
       else if (k === "shield") pl.shield = Math.min(3, pl.shield + 1);
-      if (isRanked(room)) { store.bumpStat(pl.key, "pickups"); bumpQuest(room, pl, "pickups"); }
+      else if (k === "skull") applyCurse(room, pl, CURSES[Math.floor(Math.random() * CURSES.length)]);
+      if (k !== "skull" && isRanked(room)) { store.bumpStat(pl.key, "pickups"); bumpQuest(room, pl, "pickups"); }
     }
   }
   // $KABOOM token drops (reserved for wager rooms; always empty in training since settleDeath transfers directly)
@@ -422,13 +435,14 @@ function movePlayer(room, pl) {
 
 function placeBomb(room, pl) {
   if (!pl.alive || room.phase !== "playing") return;
+  if (pl.curse === "nobomb") return; // cursed: can't lay bombs
   const col = Math.round((pl.x - TILE / 2) / TILE);
   const row = Math.round((pl.y - TILE / 2) / TILE);
   if (col < 0 || row < 0 || col >= room.cols || row >= room.rows) return;
   if (room.grid[row][col] !== 0) return;
   if (room.bombs.some(b => b.col === col && b.row === row)) return;
   if (room.bombs.filter(b => b.owner === pl.id).length >= pl.maxBombs) return;
-  const b = { id: room.bombId++, col, row, owner: pl.id, t: pl.remote ? 8000 : FUSE, range: pl.range, pierce: !!pl.pierce, remote: !!pl.remote };
+  const b = { id: room.bombId++, col, row, owner: pl.id, t: pl.remote ? 8000 : FUSE, range: pl.curse === "shortflame" ? 1 : pl.range, pierce: !!pl.pierce, remote: !!pl.remote };
   room.bombs.push(b);
   pl.ignore.add(b.id);
 }
@@ -457,7 +471,7 @@ function explode(room, b) {
         if (ownerPlayer && !ownerPlayer.bot) gainXp(room, ownerKey, XP_CRATE);
         if (isRanked(room)) { store.bumpStat(ownerKey, "crates"); bumpQuest(room, ownerPlayer, "crates"); }
         if (Math.random() < 0.30) {
-          const pool = ["bomb", "fire", "speed"];
+          const pool = ["bomb", "bomb", "fire", "fire", "speed", "speed", "skull", "skull"]; // ~25% of drops are a risky skull
           newUps.push({ c, r, k: pool[Math.floor(Math.random() * pool.length)] });
         }
         if (!b.pierce) break; // pierce blasts continue through crates
@@ -591,6 +605,30 @@ function tick(room, dt) {
   if (room.phase === "playing") for (const p of room.players.values()) if (p.bot && p.alive && p.ai) botThink(room, p);
   if (room.phase === "playing") for (const pl of room.players.values()) movePlayer(room, pl);
   for (const pl of room.players.values()) if (pl.vuln > 0) pl.vuln = Math.max(0, pl.vuln - dt);
+
+  // skull curses: count down, auto-drop bombs for "diarrhea", and pass on contact (hot-potato)
+  if (room.phase === "playing") {
+    const alive = [...room.players.values()].filter(p => p.alive);
+    for (const pl of alive) {
+      if (pl.curseImmune > 0) pl.curseImmune = Math.max(0, pl.curseImmune - dt);
+      if (!pl.curse) continue;
+      pl.curseT -= dt;
+      if (pl.curseT <= 0) { pl.curse = null; pl.curseT = 0; continue; }
+      if (pl.curse === "diarrhea") { pl.autoBombT -= dt; if (pl.autoBombT <= 0) { placeBomb(room, pl); pl.autoBombT = CURSE_AUTOBOMB_MS; } }
+    }
+    for (const a of alive) {
+      if (!a.curse || a.curseImmune > 0) continue;
+      for (const b of alive) {
+        if (b === a || b.curse || b.curseImmune > 0) continue;
+        if (Math.abs(a.x - b.x) < TILE * 0.72 && Math.abs(a.y - b.y) < TILE * 0.72) {
+          b.curse = a.curse; b.curseT = a.curseT; b.curseImmune = CURSE_IMMUNE_MS; b.autoBombT = CURSE_AUTOBOMB_MS;
+          a.curse = null; a.curseT = 0; a.curseImmune = CURSE_IMMUNE_MS;  // giver is cured (hot-potato)
+          pushEvent(room, { k: "curse", who: b.name, type: b.curse });
+          break;
+        }
+      }
+    }
+  }
 
   // kicked bombs slide one tile at a time until blocked
   for (const b of room.bombs) {
@@ -736,8 +774,8 @@ function snapshot(room) {
       b: p.base, s: p.skin, cl: p.clothes, a: p.alive, w: p.wins, bal: bal(p.key, room.cur),
       hp: Math.max(0, Math.round(p.hp)), mh: p.maxHp || MAX_HP, lvl: store.levelFromXp(store.getXp(p.key)),
       kk: !!p.kick, rm: !!p.remote, pi: !!p.pierce, sh: p.shield || 0, iv: p.vuln > 0 ? 1 : 0, st: p.streak || 0,
-      sp: p.speed, mb: p.maxBombs, nb: room.bombs.filter(b => b.owner === p.id).length, rg: p.range,
-      tp: p.tp ? 1 : 0 });
+      sp: effSpeed(p), mb: p.maxBombs, nb: room.bombs.filter(b => b.owner === p.id).length, rg: p.range,
+      tp: p.tp ? 1 : 0, cu: p.curse || 0 });
     p.tp = false; // one-shot: only the first snapshot after a respawn/teleport tells the client to hard-snap
   }
   return {

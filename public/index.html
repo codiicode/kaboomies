@@ -1095,6 +1095,15 @@ function pwrIcon(k,S){ // solid white icon centered at 0,0, half-extent ~S
 }
 // a real, shaded, floating object per loot type (no flat "icon on a tile" badge)
 function lootSprite(k,pulse){const O="#15151c";ctx.lineJoin="round";ctx.lineCap="round";
+  if(k==="skull"){ // cursed skull — grab at your own risk
+    ctx.fillStyle="#f3f6ef";ctx.strokeStyle=O;ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(0,-3,11,0,7);ctx.fill();ctx.stroke();            // cranium
+    rr(-6,4,12,7,2.5);ctx.fill();ctx.stroke();                              // jaw
+    ctx.fillStyle=O;ctx.beginPath();ctx.arc(-4.3,-3,3,0,7);ctx.fill();ctx.beginPath();ctx.arc(4.3,-3,3,0,7);ctx.fill(); // eye sockets
+    const gp=0.55+0.45*pulse;ctx.fillStyle="#9be36b";ctx.beginPath();ctx.arc(-4.3,-3,1.3*gp,0,7);ctx.fill();ctx.beginPath();ctx.arc(4.3,-3,1.3*gp,0,7);ctx.fill(); // green glints
+    ctx.fillStyle=O;ctx.beginPath();ctx.moveTo(0,0.5);ctx.lineTo(-1.8,3.5);ctx.lineTo(1.8,3.5);ctx.closePath();ctx.fill(); // nose
+    ctx.strokeStyle=O;ctx.lineWidth=1.3;[-3,0,3].forEach(tx=>{ctx.beginPath();ctx.moveTo(tx,11);ctx.lineTo(tx,7);ctx.stroke();}); // teeth
+    return;}
   if(k==="speed"){ // running sneaker
     ctx.save();ctx.rotate(-0.06);
     ctx.fillStyle="#fafdff";ctx.strokeStyle=O;ctx.lineWidth=2;
@@ -1151,7 +1160,7 @@ function lootSprite(k,pulse){const O="#15151c";ctx.lineJoin="round";ctx.lineCap=
 }
 function drawPowerup(u){const x=u.c*TILE+TILE/2,y=u.r*TILE+TILE/2,now=performance.now(),t=now/560+(u.c*1.3+u.r*0.7);
   const lift=Math.sin(t)*3, pulse=0.5+0.5*Math.sin(t*1.5);
-  const GLOW={bomb:"#5aa0ff",fire:"#ff7a3c",speed:"#36d27a",kick:"#ffc222",remote:"#ff5db1",pierce:"#b58cff",shield:"#43c8e6"};
+  const GLOW={bomb:"#5aa0ff",fire:"#ff7a3c",speed:"#36d27a",kick:"#ffc222",remote:"#ff5db1",pierce:"#b58cff",shield:"#43c8e6",skull:"#9be36b"};
   const gc=GLOW[u.k]||"#36d27a";
   ctx.save();ctx.translate(x,y);
   ctx.fillStyle="rgba(0,0,0,.20)";ctx.beginPath();ctx.ellipse(0,16,10.5,3.4,0,0,7);ctx.fill();
@@ -1849,6 +1858,7 @@ function applyEvent(e){
   else if(e.k==="draw"){pushFeed("— draw —");}
   else if(e.k==="emote"){bubbles[e.id]={e:e.e,until:performance.now()+2200};sfx("emote");}
   else if(e.k==="levelup"){pushFeed("⭐ "+e.who+" reached Lv "+e.lvl,"win");sfx("win");}
+  else if(e.k==="curse"){const cm={reverse:"reversed controls",hyper:"hyper speed",slow:"slowed",nobomb:"can’t bomb",diarrhea:"bomb diarrhea",shortflame:"tiny flame"};pushFeed("💀 "+e.who+" cursed — "+(cm[e.type]||"cursed"));sfx("emote");}
   else if(e.k==="gameover"){
     const winners=Array.isArray(e.winners)?e.winners:(e.winners?[e.winners]:[]);
     gameOver={winners,prize:+e.prize||0,until:performance.now()+6000};
@@ -1923,8 +1933,8 @@ function syncPlayers(){
     if(lb&&Math.hypot(p.x-lb.x,p.y-lb.y)>TILE*2.5)rp.buf.length=0; // teleport/respawn -> drop history, no smearing
     rp.buf.push({t:nowT,x:p.x,y:p.y});
     while(rp.buf.length>2&&rp.buf[0].t<nowT-600)rp.buf.shift();
-    rp.tx=p.x;rp.ty=p.y;rp.base=p.b;rp.skin=p.s;rp.clothes=p.cl;rp.alive=p.a;rp.name=p.n;rp.wins=p.w;rp.hp=p.hp;rp.mh=p.mh;rp.lvl=p.lvl;
-    if(!local&&p.id===myId)predReconcile(p.x,p.y,p.sp,p.a,p.tp);}
+    rp.tx=p.x;rp.ty=p.y;rp.base=p.b;rp.skin=p.s;rp.clothes=p.cl;rp.alive=p.a;rp.name=p.n;rp.wins=p.w;rp.hp=p.hp;rp.mh=p.mh;rp.lvl=p.lvl;rp.cu=p.cu||0;
+    if(!local&&p.id===myId){myCurse=p.cu||null;predReconcile(p.x,p.y,p.sp,p.a,p.tp);}}
   for(const id in rpos)if(!ids.has(+id))delete rpos[id];
 }
 
@@ -2108,7 +2118,7 @@ function stepLocal(dt){stepAcc+=dt;let n=0;while(stepAcc>=STEP_MS&&n<5){tickL(ST
 const held={u:false,d:false,l:false,r:false};
 function sendInput(){if(ws&&ws.readyState===1)ws.send(JSON.stringify({t:"in",...held}));}
 function setHeld(k,v){if(held[k]!==v){held[k]=v;sendInput();}}
-function bomb(){sfx("place");if(local){if(meLP&&meLP.alive&&phaseL==="playing")placeBombL(meLP);return;}if(ws&&ws.readyState===1){predGhostBomb();ws.send(JSON.stringify({t:"bomb"}));}}
+function bomb(){if(!local&&myCurse==="nobomb")return;sfx("place");if(local){if(meLP&&meLP.alive&&phaseL==="playing")placeBombL(meLP);return;}if(ws&&ws.readyState===1){predGhostBomb();ws.send(JSON.stringify({t:"bomb"}));}}
 function detonate(){if(local){if(meLP)detonateL(meLP);return;}if(ws&&ws.readyState===1)ws.send(JSON.stringify({t:"det"}));}
 /* ---------- client-side prediction: YOUR kaboomie moves with 0 delay ----------
    Mirrors the server movePlayer (same collision + corner-slide) but advances a
@@ -2117,7 +2127,7 @@ function detonate(){if(local){if(meLP)detonateL(meLP);return;}if(ws&&ws.readySta
    Correction toward the server is applied smoothly every frame and ONLY on an axis
    you're not actively driving, so steady running is never pulled back (no rubber-
    banding); a real desync (respawn/teleport) hard-snaps. */
-let pred=null, predMoving=false, srvX=0, srvY=0, rself=null, predIdle=0; const PRED_TICK=1000/60;
+let pred=null, predMoving=false, srvX=0, srvY=0, rself=null, predIdle=0, myCurse=null; const PRED_TICK=1000/60;
 /* ---------- action prediction: INSTANT bombs & loot pickup ----------
    Show your bomb the instant you press, and hide loot the instant you step on it,
    then let the authoritative server snapshot confirm. Timeouts undo anything the
@@ -2152,6 +2162,7 @@ function predCanBe(px,py,ign){const PHB=TILE*0.30,x0=px-PHB,x1=px+PHB,y0=py-PHB,
 function predStep(sc){ // advance movement by `sc` server-ticks worth (sc may be fractional -> smooth at any FPS)
   const ign=new Set();for(const b of state.bombs)if(predOverlap(pred.x,pred.y,b))ign.add(b); // pass through a bomb you're standing on
   let dx=(held.r?1:0)-(held.l?1:0),dy=(held.d?1:0)-(held.u?1:0);
+  if(myCurse==="reverse"){dx=-dx;dy=-dy;} // mirror the server's reversed-controls curse so prediction matches
   if(dx&&dy){dx*=0.7071;dy*=0.7071;}const sp=pred.speed*sc;
   if(dx){const nx=pred.x+dx*sp;if(predCanBe(nx,pred.y,ign))pred.x=nx;else{const ce=Math.round((pred.y-TILE/2)/TILE)*TILE+TILE/2;const ny=pred.y+Math.sign(ce-pred.y)*Math.min(sp,Math.abs(ce-pred.y));if(Math.abs(ce-pred.y)>1&&predCanBe(nx,ny,ign)){pred.x=nx;pred.y=ny;}}}
   if(dy){const ny=pred.y+dy*sp;if(predCanBe(pred.x,ny,ign))pred.y=ny;else{const ce=Math.round((pred.x-TILE/2)/TILE)*TILE+TILE/2;const nx=pred.x+Math.sign(ce-pred.x)*Math.min(sp,Math.abs(ce-pred.x));if(Math.abs(ce-pred.x)>1&&predCanBe(nx,ny,ign)){pred.y=ny;pred.x=nx;}}}
@@ -2261,7 +2272,7 @@ function drawParticles(){for(const p of particles){const k=Math.max(0,p.life/p.m
     else if(p.shape==="smoke"){ctx.fillStyle=p.col;ctx.beginPath();ctx.arc(0,0,p.size*(1.6-k),0,7);ctx.fill();}
     else{ctx.fillStyle=p.col;ctx.beginPath();ctx.arc(0,0,p.size,0,7);ctx.fill();}
     ctx.restore();}ctx.globalAlpha=1;}
-const _PWRCOL={bomb:"#3d9bff",fire:"#ff7a3c",speed:"#2fc46b",kick:"#ffc222",remote:"#ff5db1",pierce:"#9b6bff",shield:"#43c8e6"};
+const _PWRCOL={bomb:"#3d9bff",fire:"#ff7a3c",speed:"#2fc46b",kick:"#ffc222",remote:"#ff5db1",pierce:"#9b6bff",shield:"#43c8e6",skull:"#8bd25f"};
 function juiceTick(dt){
   const fnow=new Set();let newFires=0;
   for(const f of state.fires){const key=f.c+","+f.r;fnow.add(key);if(!_jp.fire.has(key)){newFires++;const x=f.c*TILE+TILE/2,y=f.r*TILE+TILE/2;sparkBurst(x,y,"#ffe08a",4,2.6);sparkBurst(x,y,"#ff7a2a",3,2.0);}}
@@ -2334,6 +2345,9 @@ function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
       if(rp.mh){const bw=TILE*0.8,bh=5,bx=rp.x-bw/2,by=gy+12,ratio=Math.max(0,Math.min(1,(rp.hp==null?rp.mh:rp.hp)/rp.mh));
         ctx.fillStyle="rgba(0,0,0,.5)";rr(bx-1.5,by-1.5,bw+3,bh+3,3);ctx.fill();
         ctx.fillStyle=ratio>0.5?"#43d17f":ratio>0.25?"#ffd23f":"#ff3b30";rr(bx,by,Math.max(0,bw*ratio),bh,2);ctx.fill();}
+      if(rp.cu&&rp.alive){const cy=gy-22,lbl=({reverse:"REVERSED",hyper:"HYPER",slow:"SLOW",nobomb:"NO BOMB",diarrhea:"DIARRHEA",shortflame:"TINY FLAME"})[rp.cu]||"CURSED";
+        ctx.font="16px serif";ctx.fillStyle="#fff";ctx.fillText("💀",rp.x,cy-1+Math.sin(now/200+rp.x)*1.5);
+        ctx.font="bold 9px 'VT323',monospace";ctx.lineWidth=3;ctx.strokeStyle="rgba(0,0,0,.65)";ctx.strokeText(lbl,rp.x,cy+12);ctx.fillStyle="#b6f58c";ctx.fillText(lbl,rp.x,cy+12);}
       const bub=bubbles[e.id];if(bub&&bub.until>now){const by=rp.y-TILE*0.92;
         ctx.fillStyle="#fff";ctx.strokeStyle="#141414";ctx.lineWidth=2;rr(rp.x-15,by-26,30,26,7);ctx.fill();ctx.stroke();
         ctx.beginPath();ctx.moveTo(rp.x-4,by);ctx.lineTo(rp.x+4,by);ctx.lineTo(rp.x,by+6);ctx.closePath();ctx.fill();ctx.stroke();
