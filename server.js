@@ -26,7 +26,7 @@ const DMG_CORE = 100;       // blast damage on the bomb tile + tiles adjacent to
 const DMG_EDGE = 50;        // blast damage further out along the arm (two hits to kill)
 const XP_KILL = 25, XP_WIN = 100, XP_CRATE = 2; // account-level XP rewards (loot pickups give no XP)
 const GAME_ROUNDS = 5;      // wager games are best-of: this many rounds per game before payout
-const LOBBY_COUNTDOWN_MS = 20000; // wager: fill window once >=MIN are present (lets a room fill toward MAX before starting)
+const LOBBY_COUNTDOWN_MS = 60000; // wager: fill window once >=MIN are present (lets a room fill toward MAX before starting)
 const LOBBY_FULL_MS = 3000;       // wager: once the room is FULL (MAX_PLAYERS), start within this instead of waiting out the window
 const MIN_WAGER_PLAYERS = 2;      // wager: a game never starts (and nobody is charged) below this
 
