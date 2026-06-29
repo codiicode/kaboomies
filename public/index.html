@@ -404,12 +404,12 @@
         <div class="divider"><i></i><i></i><i></i><i></i><i></i></div>
         <div class="badges">
           <span class="badge">play anywhere</span>
-          <span class="badge">up to 8 players on the same map</span>
+          <span class="badge">up to 6 players per arena</span>
           <span class="badge">phone or desktop</span>
         </div>
         <section class="faq">
           <h2>FAQ</h2>
-          <details><summary>What is KABOOMIES?</summary><p>A fast, last-kaboomie-standing arena battle. Bomb your rivals, grab power-ups, and be the last one breathing. Up to 8 players per map.</p></details>
+          <details><summary>What is KABOOMIES?</summary><p>A fast, last-kaboomie-standing arena battle. Bomb your rivals, grab power-ups, and be the last one breathing. Up to 6 players per arena.</p></details>
           <details><summary>How do I play?</summary><p>Desktop: move with <b>WASD</b> or the <b>arrow keys</b>, drop a bomb with <b>Space</b>. Mobile: use the on-screen <b>d-pad</b> and bomb button. Blow up crates for power-ups and take out everyone else.</p></details>
           <details><summary>Is it free?</summary><p>Yes — <b>Training</b> mode is free practice with play-money chips, no cost. Real-money <b>$KABOOM</b> arenas are coming soon.</p></details>
           <details><summary>What do the power-ups do?</summary><p>Blow up crates to grab loot: 💣 <b>more bombs</b> · 🔥 <b>bigger blasts</b> · 👟 <b>speed</b>. Watch out for the 💀 <b>skull</b> — it hits you with a random temporary <b>curse</b> (reversed controls, hyper-speed, can’t place bombs, or a tiny blast). You can pass a curse to a rival by <b>touching them</b> — which cures you. Your current loadout is shown at the top of the screen.</p></details>
@@ -1658,7 +1658,7 @@ function renderArenas(maps){const host=$("arena-list");if(!host)return;host.inne
     card.innerHTML='<div class="an">TRAINING GROUND</div>'+
       '<div class="ad">free-for-all practice</div>'+
       '<div class="stake free">🎮 Free practice · no token cost</div>'+
-      '<div class="ap"><span class="live"></span>'+(tm.players||0)+'<b> / '+(tm.cap||10)+'</b> playing</div>';
+      '<div class="ap"><span class="live"></span>'+(tm.players||0)+'<b> / '+(tm.cap||6)+'</b> playing</div>';
     card.onclick=()=>joinMap(tm.id);host.appendChild(card);return;
   }
   host.style.gridTemplateColumns="";host.style.justifyContent=""; // real money: back to the multi-arena stake grid

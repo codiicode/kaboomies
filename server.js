@@ -55,7 +55,7 @@ function dailySeed() {
   return (d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate()) >>> 0;
 }
 const DEFAULT_MAP = "brawl";
-const MAX_PLAYERS = 10;
+const MAX_PLAYERS = 6; // per arena instance; rooms auto-shard (roomFor opens a new one when full)
 
 const balances = new Map(); // (cur|walletKey) -> number (live cache backed by store)
 
