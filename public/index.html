@@ -1816,7 +1816,7 @@ let ws=null, myId=null, connected=false;
 let COLS=15,ROWS=13,TILE=44,W=660,H=572,FUSE=2400,grid=null;
 let state={players:[],bombs:[],fires:[],ups:[],drops:[],warn:[],ph:"playing",win:"",gr:0,gn:0};
 const rpos={};
-let myBal=START_BAL, myPot=0, pendingAuth=null, verifiedWallet=false, myWager=false, myAnte=0;
+let myBal=START_BAL, myPot=0, pendingAuth=null, verifiedWallet=false, myWager=false, myAnte=0, myWaiting=false;
 let killfeed=[], bubbles={}, prevBalForSfx=START_BAL;
 function pushFeed(text,cls){killfeed.unshift({text,cls:cls||"",until:performance.now()+5200});killfeed=killfeed.slice(0,5);}
 function applyEvent(e){
@@ -1827,6 +1827,7 @@ function applyEvent(e){
   else if(e.k==="emote"){bubbles[e.id]={e:e.e,until:performance.now()+2200};sfx("emote");}
   else if(e.k==="levelup"){pushFeed("⭐ "+e.who+" reached Lv "+e.lvl,"win");sfx("win");}
   else if(e.k==="curse"){const cm={reverse:"reversed controls",hyper:"hyper speed",slow:"slowed",nobomb:"can’t bomb",shortflame:"tiny flame"};pushFeed("💀 "+e.who+" cursed — "+(cm[e.type]||"cursed"));sfx("emote");}
+  else if(e.k==="abandon"){pushFeed("↩ Game abandoned — buy-in refunded","win");refreshAccountBalance&&refreshAccountBalance();}
   else if(e.k==="gameover"){
     const winners=Array.isArray(e.winners)?e.winners:(e.winners?[e.winners]:[]);
     gameOver={winners,prize:+e.prize||0,until:performance.now()+6000};
@@ -1880,7 +1881,9 @@ function connect(){
     else if(m.t==="rtc"){onSignal(m.from,m.data);}
     else if(m.t==="toast"){pushFeed((m.kind==="quest"?"✅ ":"🔥 ")+m.label+" +"+m.xp+" XP","win");sfx("win");}
     else if(m.t==="s"){state.players=m.players;state.bombs=m.bombs;state.fires=m.fires;state.ups=m.ups;state.drops=m.drops||[];state.warn=m.warn||[];state.ph=m.ph;state.win=m.win;state.gr=m.gr||0;state.gn=m.gn||0;
+      state.cd=m.cd||0;state.hu=m.hu||0;state.need=m.need||0;             // wager lobby: countdown + headcount
       const me=m.players.find(p=>p.id===myId);if(me&&typeof me.bal==="number")myBal=me.bal;
+      myWaiting=!!(me&&me.spec);                                          // I joined mid-game -> waiting for the next one
       if(typeof m.pot==="number")myPot=m.pot;
       if(myBal>prevBalForSfx)sfx("pickup");prevBalForSfx=myBal;
       if(m.sudden&&!suddenOn)sfx("sudden");if(m.sudden)suddenOn=true;
@@ -2210,7 +2213,10 @@ function updateBanner(){const b=$("banner"),txt=$("bannerText");const now=perfor
   }
   txt.classList.remove("gameover");
   if(gameOver&&gameOver.until<=now)gameOver=null;
-  if(state.ph==="roundover"){b.style.display="flex";txt.innerHTML=(state.win&&state.win!=="Draw"?(state.win+" wins!"):"Draw!")+"<small>Next round starting…</small>";}
+  if(state.ph==="waiting"){b.style.display="flex";const need=state.need||2,have=Math.min(state.hu||state.players.length||0,need);txt.innerHTML="WAITING FOR PLAYERS<small>"+have+" / "+need+" — share the link so friends can join</small>";}
+  else if(state.ph==="countdown"){b.style.display="flex";txt.innerHTML="STARTING IN "+(state.cd||0)+"…<small>your buy-in locks in when the match begins</small>";}
+  else if(myWaiting&&(state.ph==="playing"||state.ph==="roundover")){b.style.display="flex";txt.innerHTML="JOINING NEXT GAME<small>watching this one finish — you’re not charged yet</small>";}
+  else if(state.ph==="roundover"){b.style.display="flex";txt.innerHTML=(state.win&&state.win!=="Draw"?(state.win+" wins!"):"Draw!")+"<small>Next round starting…</small>";}
   else if(state.players.length<2){b.style.display="flex";txt.innerHTML="Waiting for players…<small>Share the link so friends can join</small>";}
   else b.style.display="none";}
 
@@ -2270,7 +2276,7 @@ function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
     for(const b of state.bombs)drawBomb(b);
     for(const b of predBombs)drawBomb({c:b.c,r:b.r,f:1}); // instant ghost bombs (until server confirms)
     const ents=Object.keys(rpos).map(id=>({id:+id,rp:rpos[id]}));
-    if(!local&&pred)predTick(dt);
+    if(!local&&pred&&state.ph==="playing")predTick(dt); // frozen in the wager lobby (waiting/countdown)
     if(!local)predActionTick();
     const rtime=now-INTERP_DELAY;
     for(const e of ents){const rp=e.rp;let rx,ry;

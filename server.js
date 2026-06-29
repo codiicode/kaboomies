@@ -26,6 +26,8 @@ const DMG_CORE = 100;       // blast damage on the bomb tile + tiles adjacent to
 const DMG_EDGE = 50;        // blast damage further out along the arm (two hits to kill)
 const XP_KILL = 25, XP_WIN = 100, XP_CRATE = 2; // account-level XP rewards (loot pickups give no XP)
 const GAME_ROUNDS = 5;      // wager games are best-of: this many rounds per game before payout
+const LOBBY_COUNTDOWN_MS = 5000; // wager: once >=MIN_WAGER_PLAYERS are present, count down then start
+const MIN_WAGER_PLAYERS = 2;     // wager: a game never starts (and nobody is charged) below this
 
 // --- Skull curses (Atomic-Bomberman style): grab the skull -> a random temporary curse.
 // Touch a clean player to pass it on (hot-potato) and cure yourself. One curse at a time,
@@ -238,6 +240,7 @@ function makeRoom(mapId, mode) {
   const cols = cfg.cols, rows = cfg.rows;
   const grid = generateRoom(cols, rows, cfg.density);
   const m = mode === "real" ? "real" : "play";
+  const startWaiting = (m === "real") && !!cfg.wager; // wager rooms open in the lobby, not mid-fight
   return {
     mapId: MAPS[mapId] ? mapId : DEFAULT_MAP,
     mode: m, cur: m === "real" ? "real" : "play",
@@ -247,7 +250,7 @@ function makeRoom(mapId, mode) {
     bombs: [], fires: [], ups: [], drops: [], destroyed: [], walls: [], events: [],
     players: new Map(), pot: 0,
     gameRound: 1, roundWins: new Map(),
-    phase: "playing", winner: "", bombId: 1, roundTimer: null,
+    phase: startWaiting ? "waiting" : "playing", countdownMs: 0, winner: "", bombId: 1, roundTimer: null,
     elapsed: 0, sudden: false, closeOrder: null, closeIdx: 0, pendingWalls: [], closeTimer: 0,
   };
 }
@@ -262,10 +265,10 @@ function newRound(room) {
   room.bombId = 1; room.phase = "playing"; room.winner = ""; if (!isWagerGame(room)) room.pot = 0;
   room.elapsed = 0; room.sudden = false; room.closeOrder = null; room.closeIdx = 0; room.pendingWalls = []; room.closeTimer = 0;
   let i = 0;
-  for (const p of room.players.values()) { resetPlayer(p, sp[i % sp.length]); i++; }
+  for (const p of room.players.values()) { resetPlayer(p, sp[i % sp.length]); if (p.spectating) p.alive = false; i++; }
   roundAnte(room);
-  // wager games: lock each human's once-per-game buy-in into the fresh pot
-  if (isWagerGame(room)) for (const p of room.players.values()) if (!p.bot) chargeBuyIn(room, p);
+  // NOTE: buy-ins are charged once at GAME start (startWagerGame), not per round — so a fresh
+  // round here never re-charges. Spectators (joined mid-game) stay out until the next game.
   syncBots(room);
 }
 
@@ -336,6 +339,8 @@ function addPlayer(room, p) {
   const idx = room.players.size % sp.length;
   p.wins = p.wins || 0;
   p.boughtIn = false; // once-per-game buy-in flag; persists across rounds, reset only at game start
+  p.paid = 0;         // amount charged for the current wager game (for refund on abandon)
+  p.spectating = false; // joined mid-game -> waits out the current game, not charged
   resetPlayer(p, sp[idx]);
   room.players.set(p.id, p);
   if (!p.bot && !balances.has(p.key)) balances.set(p.key, START_BAL); // bots never get a balance row (kept off leaderboard)
@@ -560,10 +565,39 @@ function chargeBuyIn(room, p) {
   if (bal(p.key, room.cur) >= cfg.buyIn) {
     setBal(p.key, bal(p.key, room.cur) - cfg.buyIn, p.name, room.cur);
     room.pot += cfg.buyIn;
-    p.boughtIn = true;
+    p.boughtIn = true; p.paid = cfg.buyIn;
   } else {
-    p.boughtIn = false; p.alive = false;
+    p.boughtIn = false; p.paid = 0; p.alive = false; p.spectating = true; // can't cover it -> sit this game out
   }
+}
+
+// Start a wager game: charge every present, solvent human's buy-in into a fresh pot, then play.
+// Returns false (stays in the lobby) if fewer than MIN_WAGER_PLAYERS can actually pay.
+function startWagerGame(room) {
+  const cfg = MAPS[room.mapId];
+  const eligible = [...room.players.values()].filter(p => !p.bot && bal(p.key, room.cur) >= cfg.buyIn);
+  if (eligible.length < MIN_WAGER_PLAYERS) { room.phase = "waiting"; room.countdownMs = 0; return false; }
+  room.pot = 0; room.gameRound = 1; room.roundWins = new Map();
+  for (const p of room.players.values()) {
+    if (p.bot) continue;
+    p.boughtIn = false; p.paid = 0;
+    p.spectating = bal(p.key, room.cur) < cfg.buyIn; // can't afford -> spectate this game (not charged)
+  }
+  for (const p of eligible) chargeBuyIn(room, p); // debits buy-in, sets p.paid, fills the pot
+  newRound(room); // fresh grid + spawns; phase -> "playing"; spectators kept dead
+  return true;
+}
+
+// A wager game collapsed below MIN_WAGER_PLAYERS (someone left). Refund every player still
+// present their own buy-in (no rake — no real contest happened); whoever LEFT forfeits theirs.
+function abandonWagerGame(room) {
+  for (const p of room.players.values()) {
+    if (!p.bot && p.paid > 0) { setBal(p.key, bal(p.key, room.cur) + p.paid, p.name, room.cur); p.paid = 0; }
+    p.boughtIn = false; p.spectating = false; p.alive = false;
+  }
+  room.pot = 0; room.roundWins = new Map(); room.winner = "";
+  room.phase = "waiting"; room.countdownMs = 0;
+  pushEvent(room, { k: "abandon" });
 }
 
 function settleDeath(room, victim, killer) {
@@ -589,6 +623,17 @@ function settleDeath(room, victim, killer) {
 }
 
 function tick(room, dt) {
+  // Wager lobby: wait for >=MIN_WAGER_PLAYERS, then count down, then charge buy-ins and start.
+  // Nobody is charged until startWagerGame fires, so sitting alone in the lobby costs nothing.
+  if (isWagerGame(room) && (room.phase === "waiting" || room.phase === "countdown")) {
+    const humans = humanCount(room);
+    if (room.phase === "waiting") {
+      if (humans >= MIN_WAGER_PLAYERS) { room.phase = "countdown"; room.countdownMs = LOBBY_COUNTDOWN_MS; }
+    } else { // countdown
+      if (humans < MIN_WAGER_PLAYERS) { room.phase = "waiting"; room.countdownMs = 0; }
+      else { room.countdownMs -= dt; if (room.countdownMs <= 0) startWagerGame(room); }
+    }
+  }
   if (room.phase === "playing") for (const p of room.players.values()) if (p.bot && p.alive && p.ai) botThink(room, p);
   if (room.phase === "playing") for (const pl of room.players.values()) movePlayer(room, pl);
 
@@ -691,15 +736,10 @@ function endGame(room) {
   }
   room.pot = 0;
   pushEvent(room, { k: "gameover", winners: winners.map(w => w.name), prize });
-  startGame(room);
-}
-function startGame(room) {
-  room.gameRound = 1; room.roundWins = new Map();
-  // clear the once-per-game buy-in flag so the NEXT round (newRound, phase "playing")
-  // locks fresh buy-ins into a fresh pot. We do NOT charge here: endGame must leave
-  // the pot at 0 between games, and the just-paid winner shouldn't be re-charged
-  // synchronously off their winnings.
-  for (const p of room.players.values()) p.boughtIn = false;
+  // Back to the lobby. The next game only starts (and charges fresh buy-ins) once
+  // >=MIN_WAGER_PLAYERS are present again — handled by the waiting/countdown loop in tick().
+  for (const p of room.players.values()) { p.boughtIn = false; p.paid = 0; p.spectating = false; p.alive = false; }
+  room.phase = "waiting"; room.countdownMs = 0; room.gameRound = 1; room.roundWins = new Map(); room.winner = "";
 }
 
 function maybeEndRound(room) {
@@ -746,7 +786,7 @@ function snapshot(room) {
       hp: Math.max(0, Math.round(p.hp)), mh: p.maxHp || MAX_HP, lvl: store.levelFromXp(store.getXp(p.key)),
       st: p.streak || 0,
       sp: effSpeed(p), mb: p.maxBombs, nb: room.bombs.filter(b => b.owner === p.id).length, rg: p.range,
-      tp: p.tp ? 1 : 0, cu: p.curse || 0 });
+      tp: p.tp ? 1 : 0, cu: p.curse || 0, spec: p.spectating ? 1 : 0 });
     p.tp = false; // one-shot: only the first snapshot after a respawn/teleport tells the client to hard-snap
   }
   return {
@@ -758,6 +798,8 @@ function snapshot(room) {
     drops: room.drops.map(d => ({ c: d.c, r: d.r, a: d.a })),
     pot: room.pot, gr: room.gameRound, gn: GAME_ROUNDS, ev: room.events.slice(),
     ph: room.phase, win: room.winner, sudden: room.sudden,
+    cd: room.phase === "countdown" ? Math.max(0, Math.ceil((room.countdownMs || 0) / 1000)) : 0, // lobby countdown (s)
+    hu: humanCount(room), need: isWagerGame(room) ? MIN_WAGER_PLAYERS : 0,                        // waiting-room headcount
     warn: room.pendingWalls.map(w => ({ c: w.c, r: w.r })), // tiles about to become walls (client flashes them)
   };
 }
@@ -888,10 +930,10 @@ async function handleWithdraw(body) {
 
 module.exports = {
   TILE, FUSE, BLAST, START_BAL, DEATH_DROP, SUDDEN_AFTER, CLOSE_EVERY, POT_SHARE, MAX_HP, DMG_CORE, DMG_EDGE, GAME_ROUNDS,
-  BOUNTY_STEP, BOUNTY_MAX, MAPS, balances,
+  LOBBY_COUNTDOWN_MS, MIN_WAGER_PLAYERS, BOUNTY_STEP, BOUNTY_MAX, MAPS, balances,
   bal, setBal, genGrid, latticeGrid, generateRoom, connected, spawns, clearSpawns, monument,
   makeRoom, newRound, addPlayer, movePlayer, buildCloseOrder, solidifyTile, stepClosing, dailySeed, roundAnte,
-  placeBomb, explode, settleDeath, chargeBuyIn, sweepLoot, endGame, startGame, tick, snapshot, store, auth,
+  placeBomb, explode, settleDeath, chargeBuyIn, sweepLoot, endGame, startWagerGame, abandonWagerGame, tick, snapshot, store, auth,
   buildProfile, buildQuests, bumpQuest, characters,
   humanCount, isRanked, isWagerGame, botTarget, botWalkable, botBlastCells, botDangerSet,
   makeBot, syncBots, broadcast, rateAllow, custody, handleWithdraw,
@@ -1087,7 +1129,9 @@ function startServer(port) {
         };
         addPlayer(room, player);
         syncBots(room);
-        if (isWagerGame(room) && room.phase === "playing") chargeBuyIn(room, player); // lock the once-per-game buy-in into the pot
+        // wager: NEVER charge on join. If a game is already in progress, the newcomer spectates
+        // until the next game; otherwise they sit in the lobby and get charged when it starts.
+        if (isWagerGame(room) && (room.phase === "playing" || room.phase === "roundover")) { player.spectating = true; player.alive = false; }
         const today = quests.dayIndex(Date.now());
         let streakResult = null;
         if (player.verified) {
@@ -1139,6 +1183,12 @@ function startServer(port) {
               p.ws.send(JSON.stringify({ t: "voice-peer-left", id: player.id }));
         room.players.delete(player.id);
         syncBots(room);
+        // wager: if leaving drops a live game below the minimum, abandon it and refund whoever's
+        // still here their buy-in (the player who left forfeits theirs).
+        if (isWagerGame(room) && (room.phase === "playing" || room.phase === "roundover")) {
+          const chargedPresent = [...room.players.values()].filter(p => !p.bot && p.paid > 0).length;
+          if (chargedPresent < MIN_WAGER_PLAYERS) { clearTimeout(room.roundTimer); room.roundTimer = null; abandonWagerGame(room); }
+        }
         if (humanCount(room) === 0) { clearTimeout(room.roundTimer); for (const b of [...room.players.values()]) room.players.delete(b.id); dropRoom(room); }
       }
     });

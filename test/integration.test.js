@@ -20,8 +20,8 @@ test("full 5-round wager game charges buy-in once, accumulates pot, pays winner 
   s.setBal("ig-a", 30000, "A", "real");
   s.setBal("ig-b", 30000, "B", "real");
 
-  // Round 1: newRound locks each human's once-per-game buy-in into a fresh pot.
-  s.newRound(room);
+  // Game start: startWagerGame locks each human's once-per-game buy-in into a fresh pot.
+  assert.strictEqual(s.startWagerGame(room), true);
   assert.strictEqual(A.boughtIn, true);
   assert.strictEqual(B.boughtIn, true);
   assert.strictEqual(room.pot, 10000, "two 5000 buy-ins = 10000 pot");
@@ -50,11 +50,12 @@ test("full 5-round wager game charges buy-in once, accumulates pot, pays winner 
   assert.strictEqual(s.bal("ig-a", "real"), 25000 + 9500, "winner gets pot minus rake");
   assert.strictEqual(s.bal("ig-b", "real"), 25000, "loser unchanged");
   assert.strictEqual(room.pot, 0, "pot emptied at game end");
-  assert.strictEqual(room.gameRound, 1, "startGame reset the game round");
+  assert.strictEqual(room.gameRound, 1, "game round reset for the next game");
+  assert.strictEqual(room.phase, "waiting", "game returns to the lobby after payout");
   assert.strictEqual(A.boughtIn, false, "buy-in flag cleared for the next game");
 
-  // A fresh game charges buy-ins again (balances still cover it).
-  s.newRound(room);
+  // A fresh game (startWagerGame) charges buy-ins again (balances still cover it).
+  s.startWagerGame(room);
   assert.strictEqual(room.pot, 10000, "next game re-charges fresh buy-ins");
   assert.strictEqual(s.bal("ig-a", "real"), 34500 - 5000);
   assert.strictEqual(s.bal("ig-b", "real"), 25000 - 5000);
