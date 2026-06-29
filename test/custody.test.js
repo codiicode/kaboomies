@@ -63,6 +63,27 @@ test("parseIncoming returns null for unrelated mint or outbound transfer", () =>
   const other = custody._fakeTx({ sig: "S2", from: "walletA", to: "TREASURY_ATA", mint: "OTHER", amount: 10 });
   assert.strictEqual(custody.parseIncoming(other, { treasuryAta: "TREASURY_ATA", mint: "MINT" }), null);
 });
+// Regression: getParsedTransaction returns accountKeys as { pubkey: PublicKey, ... } where pubkey is an
+// OBJECT, not a string. A string-only comparison silently fails -> no deposit ever credited on mainnet.
+// (Caught by devnet validation; the _fakeTx-based tests above used string keys and missed it.)
+test("parseIncoming handles real getParsedTransaction object accountKeys (pubkey is a PublicKey object)", () => {
+  const pk = (s) => ({ pubkey: { toBase58: () => s } }); // mimic web3.js ParsedMessageAccount
+  const tx = {
+    transaction: { signatures: ["S3"], message: { accountKeys: [pk("ATA_OF_walletA"), pk("TREASURY_ATA")] } },
+    meta: {
+      preTokenBalances: [
+        { accountIndex: 0, mint: "MINT", owner: "walletA", uiTokenAmount: { amount: "50000" } },
+        { accountIndex: 1, mint: "MINT", owner: "TREASURY_OWNER", uiTokenAmount: { amount: "0" } },
+      ],
+      postTokenBalances: [
+        { accountIndex: 0, mint: "MINT", owner: "walletA", uiTokenAmount: { amount: "0" } },
+        { accountIndex: 1, mint: "MINT", owner: "TREASURY_OWNER", uiTokenAmount: { amount: "50000" } },
+      ],
+    },
+  };
+  const out = custody.parseIncoming(tx, { treasuryAta: "TREASURY_ATA", mint: "MINT" });
+  assert.deepStrictEqual(out, { sig: "S3", fromWallet: "walletA", amount: 50000 });
+});
 
 test("withdraw debits first then sends, and is idempotent on idemKey", async () => {
   store.setBalance("wd1", 20000, null, "real");

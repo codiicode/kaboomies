@@ -44,7 +44,11 @@ function parseIncoming(tx, { treasuryAta, mint }) {
   const keys = (tx.transaction && tx.transaction.message && tx.transaction.message.accountKeys) || [];
   const acct = (i) => {
     const k = keys[i];
-    return k == null ? null : (typeof k === "string" ? k : (k.pubkey || null));
+    if (k == null) return null;
+    // getParsedTransaction returns accountKeys as { pubkey: PublicKey, ... } where pubkey is a
+    // PublicKey OBJECT — must coerce to a base58 string or every === comparison silently fails.
+    const pk = typeof k === "string" ? k : (k.pubkey != null ? k.pubkey : k);
+    return pk == null ? null : (typeof pk === "string" ? pk : (pk.toBase58 ? pk.toBase58() : String(pk)));
   };
   const pre = meta.preTokenBalances || [];
   const post = meta.postTokenBalances || [];
