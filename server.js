@@ -1239,6 +1239,12 @@ function startServer(port) {
   if (tickTimer.unref) tickTimer.unref();
   if (snapTimer.unref) snapTimer.unref();
 
+  // Start the on-chain deposit watcher. INERT unless real-money is enabled (all 3 env vars) —
+  // then it polls the treasury and auto-credits inbound $KABOOM deposits to player balances.
+  // Without this, deposits would never be detected. Guarded so a watcher init error can't crash boot.
+  try { const watchTimer = custody.startWatcher(store); if (watchTimer && watchTimer.unref) watchTimer.unref(); }
+  catch (e) { console.error("deposit watcher failed to start:", e); }
+
   server.listen(port, () => console.log("KABOOMIES server on :" + port));
   return server;
 }
