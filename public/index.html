@@ -305,6 +305,11 @@
   .wcard-title{font-family:var(--display);font-size:9px;color:var(--red);margin-bottom:12px;}
   .wmsg{font-family:var(--body);font-size:18px;color:var(--grey);line-height:1.35;text-transform:none;}
   .wmsg b{color:var(--ink);}
+  .wwarn{font-family:var(--body);font-size:15px;line-height:1.4;text-transform:none;color:var(--ink);
+    background:#fff4f0;border:2px solid var(--red);border-left:6px solid var(--red);padding:10px 12px;margin-top:12px;}
+  .wwarn b{color:var(--red);}
+  .wwarn-addr{display:block;margin-top:6px;word-break:break-all;font-family:ui-monospace,monospace;font-size:13px;
+    background:#fff;border:1px solid var(--ink);padding:6px 8px;}
   .wdisabled{font-family:var(--body);font-size:18px;text-transform:uppercase;color:var(--grey);text-align:center;padding:8px 4px;}
   .waddr{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
   .waddr code{flex:1;min-width:0;word-break:break-all;font-family:ui-monospace,monospace;font-size:14px;
@@ -1756,9 +1761,12 @@ async function openWallet(){
 }
 function renderDeposit(dep){
   const addr=dep&&dep.treasury?dep.treasury:"";
+  const me=walletAddr||"";
   $("deposit-block").innerHTML=
     '<div class="waddr"><code id="dep-addr">'+esc(addr)+'</code><button class="wcopy" id="dep-copy">COPY</button></div>'+
-    '<div class="wmsg">Send <b>$KABOOM</b> from your wallet to this address — it credits your balance <b>automatically</b>.</div>';
+    '<div class="wmsg">Send <b>$KABOOM</b> to this address — it credits your balance <b>automatically</b>.</div>'+
+    '<div class="wwarn">Send <b>ONLY</b> from your connected wallet — <b>never from an exchange</b> (Coinbase, Binance, etc.) or your deposit will be <b>lost</b>. Deposits are credited to your logged-in wallet:'+
+    '<code class="wwarn-addr">'+esc(me)+'</code></div>';
   const cp=$("dep-copy");if(cp)cp.onclick=async()=>{try{await navigator.clipboard.writeText(addr);cp.textContent="COPIED ✓";setTimeout(()=>{cp.textContent="COPY";},1400);}catch(e){cp.textContent="COPY?";}};
 }
 function renderWithdraw(){
