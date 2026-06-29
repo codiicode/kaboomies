@@ -26,8 +26,9 @@ const DMG_CORE = 100;       // blast damage on the bomb tile + tiles adjacent to
 const DMG_EDGE = 50;        // blast damage further out along the arm (two hits to kill)
 const XP_KILL = 25, XP_WIN = 100, XP_CRATE = 2; // account-level XP rewards (loot pickups give no XP)
 const GAME_ROUNDS = 5;      // wager games are best-of: this many rounds per game before payout
-const LOBBY_COUNTDOWN_MS = 5000; // wager: once >=MIN_WAGER_PLAYERS are present, count down then start
-const MIN_WAGER_PLAYERS = 2;     // wager: a game never starts (and nobody is charged) below this
+const LOBBY_COUNTDOWN_MS = 20000; // wager: fill window once >=MIN are present (lets a room fill toward MAX before starting)
+const LOBBY_FULL_MS = 3000;       // wager: once the room is FULL (MAX_PLAYERS), start within this instead of waiting out the window
+const MIN_WAGER_PLAYERS = 2;      // wager: a game never starts (and nobody is charged) below this
 
 // --- Skull curses (Atomic-Bomberman style): grab the skull -> a random temporary curse.
 // Touch a clean player to pass it on (hot-potato) and cure yourself. One curse at a time,
@@ -628,10 +629,14 @@ function tick(room, dt) {
   if (isWagerGame(room) && (room.phase === "waiting" || room.phase === "countdown")) {
     const humans = humanCount(room);
     if (room.phase === "waiting") {
-      if (humans >= MIN_WAGER_PLAYERS) { room.phase = "countdown"; room.countdownMs = LOBBY_COUNTDOWN_MS; }
+      if (humans >= MIN_WAGER_PLAYERS) { room.phase = "countdown"; room.countdownMs = humans >= MAX_PLAYERS ? LOBBY_FULL_MS : LOBBY_COUNTDOWN_MS; }
     } else { // countdown
       if (humans < MIN_WAGER_PLAYERS) { room.phase = "waiting"; room.countdownMs = 0; }
-      else { room.countdownMs -= dt; if (room.countdownMs <= 0) startWagerGame(room); }
+      else {
+        if (humans >= MAX_PLAYERS && room.countdownMs > LOBBY_FULL_MS) room.countdownMs = LOBBY_FULL_MS; // full -> start soon, don't wait out the window
+        room.countdownMs -= dt;
+        if (room.countdownMs <= 0) startWagerGame(room);
+      }
     }
   }
   if (room.phase === "playing") for (const p of room.players.values()) if (p.bot && p.alive && p.ai) botThink(room, p);
@@ -930,7 +935,7 @@ async function handleWithdraw(body) {
 
 module.exports = {
   TILE, FUSE, BLAST, START_BAL, DEATH_DROP, SUDDEN_AFTER, CLOSE_EVERY, POT_SHARE, MAX_HP, DMG_CORE, DMG_EDGE, GAME_ROUNDS,
-  LOBBY_COUNTDOWN_MS, MIN_WAGER_PLAYERS, BOUNTY_STEP, BOUNTY_MAX, MAPS, balances,
+  LOBBY_COUNTDOWN_MS, LOBBY_FULL_MS, MIN_WAGER_PLAYERS, MAX_PLAYERS, BOUNTY_STEP, BOUNTY_MAX, MAPS, balances,
   bal, setBal, genGrid, latticeGrid, generateRoom, connected, spawns, clearSpawns, monument,
   makeRoom, newRound, addPlayer, movePlayer, buildCloseOrder, solidifyTile, stepClosing, dailySeed, roundAnte,
   placeBomb, explode, settleDeath, chargeBuyIn, sweepLoot, endGame, startWagerGame, abandonWagerGame, tick, snapshot, store, auth,

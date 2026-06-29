@@ -2214,7 +2214,7 @@ function updateBanner(){const b=$("banner"),txt=$("bannerText");const now=perfor
   txt.classList.remove("gameover");
   if(gameOver&&gameOver.until<=now)gameOver=null;
   if(state.ph==="waiting"){b.style.display="flex";const need=state.need||2,have=Math.min(state.hu||state.players.length||0,need);txt.innerHTML="WAITING FOR PLAYERS<small>"+have+" / "+need+" — share the link so friends can join</small>";}
-  else if(state.ph==="countdown"){b.style.display="flex";txt.innerHTML="STARTING IN "+(state.cd||0)+"…<small>your buy-in locks in when the match begins</small>";}
+  else if(state.ph==="countdown"){b.style.display="flex";txt.innerHTML="STARTING IN "+(state.cd||0)+"…<small>"+(state.hu||0)+"/6 in — more can still join · buy-in locks at start</small>";}
   else if(myWaiting&&(state.ph==="playing"||state.ph==="roundover")){b.style.display="flex";txt.innerHTML="JOINING NEXT GAME<small>watching this one finish — you’re not charged yet</small>";}
   else if(state.ph==="roundover"){b.style.display="flex";txt.innerHTML=(state.win&&state.win!=="Draw"?(state.win+" wins!"):"Draw!")+"<small>Next round starting…</small>";}
   else if(state.players.length<2){b.style.display="flex";txt.innerHTML="Waiting for players…<small>Share the link so friends can join</small>";}

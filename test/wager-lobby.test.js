@@ -70,6 +70,17 @@ test("ABANDON: a live game dropping below the minimum refunds those still presen
   assert.strictEqual(a.paid, 0);
 });
 
+test("a FULL room (MAX_PLAYERS) starts quickly instead of waiting out the fill window", () => {
+  const room = s.makeRoom("casual", "real"); // buyIn 500, cap 6
+  for (let i = 1; i <= s.MAX_PLAYERS; i++) { s.addPlayer(room, { id: i, key: "FULL" + i, name: "P" + i }); s.setBal("FULL" + i, 5000, "P" + i, "real"); }
+  s.tick(room, 16);                                    // full -> countdown clamps to the short window
+  assert.strictEqual(room.phase, "countdown");
+  assert.ok(room.countdownMs <= s.LOBBY_FULL_MS + 1, "a full room uses the short start window, not the 20s fill");
+  s.tick(room, s.LOBBY_FULL_MS + 100);
+  assert.strictEqual(room.phase, "playing");
+  assert.strictEqual(room.pot, 500 * s.MAX_PLAYERS, "all six buy-ins in the pot");
+});
+
 test("training (play) rooms are unaffected: they start playing immediately, no lobby", () => {
   const room = s.makeRoom("brawl", "play");
   assert.strictEqual(room.phase, "playing");
