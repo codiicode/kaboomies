@@ -4,3 +4,6 @@ kaboomies.json
 *.log
 .DS_Store
 .env
+
+# lockfile is Windows-generated; Railway (Linux) builds more reliably with `npm install`
+package-lock.json
