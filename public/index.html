@@ -1833,6 +1833,7 @@ function applyEvent(e){
     gameOver={winners,prize:+e.prize||0,until:performance.now()+6000};
     sfx("win");
     pushFeed("🏆 "+(winners.length?winners.join(" & "):"Nobody")+" takes the pot"+(e.prize?(" +"+e.prize):""),"win");
+    refreshAccountBalance&&refreshAccountBalance(); // pull the fresh real balance so the top-bar 🪙 chip shows winnings
   }
 }
 let gameOver=null; // {winners:[],prize,until} — fades the game-over overlay after a few seconds
