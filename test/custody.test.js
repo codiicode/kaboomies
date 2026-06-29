@@ -39,15 +39,21 @@ test("config exposes positive tunable caps", () => {
   assert.strictEqual(typeof c.PAUSED, "boolean");
 });
 
-test("a deposit credits the sender's real balance once; replay of same sig is a no-op", () => {
+test("a deposit credits the sender's real balance once (base units -> whole tokens); replay no-op", () => {
   store.setBalance("dep1", 0, null, "real");
-  const ok1 = custody.creditDeposit({ sig: "SIGA", fromWallet: "dep1", amount: 1000 }, store);
-  const ok2 = custody.creditDeposit({ sig: "SIGA", fromWallet: "dep1", amount: 1000 }, store); // replay
+  const baseUnits = 1000 * 1_000_000; // 1000 whole $KABOOM at 6 decimals
+  const ok1 = custody.creditDeposit({ sig: "SIGA", fromWallet: "dep1", amount: baseUnits }, store);
+  const ok2 = custody.creditDeposit({ sig: "SIGA", fromWallet: "dep1", amount: baseUnits }, store); // replay
   assert.strictEqual(ok1, true);
   assert.strictEqual(ok2, false);
-  assert.strictEqual(store.getBalance("dep1", 0, "real"), 1000);
+  assert.strictEqual(store.getBalance("dep1", 0, "real"), 1000); // credited in WHOLE tokens, not base units
   const led = store.getLedger("dep1");
   assert.ok(led.some(e => e.kind === "deposit" && e.delta === 1000));
+});
+test("creditDeposit floors sub-1-token dust to nothing", () => {
+  store.setBalance("dep2", 0, null, "real");
+  assert.strictEqual(custody.creditDeposit({ sig: "DUST", fromWallet: "dep2", amount: 500000 }, store), false); // 0.5 token
+  assert.strictEqual(store.getBalance("dep2", 0, "real"), 0);
 });
 test("creditDeposit ignores invalid input", () => {
   assert.strictEqual(custody.creditDeposit({ sig: "", fromWallet: "x", amount: 10 }, store), false);

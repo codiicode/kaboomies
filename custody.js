@@ -1,6 +1,13 @@
 "use strict";
 // Real-money custody for $KABOOM. INERT unless all three env vars are set.
 // All chain/treasury-key code is lazy-loaded so tests + the gated-off server never touch Solana libs.
+//
+// DECIMALS: the in-game economy (balances, buy-ins, pot) is denominated in WHOLE $KABOOM.
+// On-chain the token has decimals (pump.fun = 6), so 1 whole token = 10^decimals base units.
+// We convert ONLY at the two chain boundaries: deposits (base units -> whole, floor) and
+// withdrawals (whole -> base units). Everything else stays in whole tokens.
+const KABOOM_DECIMALS = Number(process.env.KABOOM_DECIMALS || 6); // pump.fun mints use 6
+const UNIT = Math.pow(10, KABOOM_DECIMALS);                       // base units per whole $KABOOM
 function enabled() {
   return !!(process.env.KABOOM_MINT && process.env.TREASURY_SECRET && process.env.SOLANA_RPC);
 }
@@ -16,11 +23,13 @@ function config() {
 // Credit a confirmed on-chain deposit to the sender's REAL balance, exactly once
 // per signature. Idempotent: a replay of the same sig is a no-op (returns false).
 function creditDeposit({ sig, fromWallet, amount }, store) {
-  if (!sig || !fromWallet || !Number.isSafeInteger(amount) || amount <= 0) return false;
-  if (store.seenSig(sig)) return false;            // idempotent: already credited
+  if (!sig || !fromWallet || !Number.isSafeInteger(amount) || amount <= 0) return false; // amount = base units
+  if (store.seenSig(sig)) return false;            // idempotent: already credited (atomic check-and-mark)
+  const tokens = Math.floor(amount / UNIT);        // base units -> whole $KABOOM (sub-1-token dust floored)
+  if (tokens <= 0) return false;                   // less than 1 whole token: nothing to credit
   const cur = "real";
-  store.setBalance(fromWallet, store.getBalance(fromWallet, 0, cur) + amount, null, cur);
-  store.ledger(fromWallet, amount, "deposit", cur);
+  store.setBalance(fromWallet, store.getBalance(fromWallet, 0, cur) + tokens, null, cur);
+  store.ledger(fromWallet, tokens, "deposit", cur);
   return true;
 }
 
@@ -243,18 +252,19 @@ async function defaultSendFn({ to, amount }) {
   const treasuryKp = web3.Keypair.fromSecretKey(bs58.decode(process.env.TREASURY_SECRET));
   const toPk = new web3.PublicKey(to);
 
+  const baseUnits = amount * UNIT; // `amount` is whole $KABOOM -> convert to on-chain base units
   const fromAta = await splToken.getOrCreateAssociatedTokenAccount(
     conn, treasuryKp, mintPk, treasuryKp.publicKey
   );
   // Pre-check treasury balance so a shortfall rolls back cleanly (clear reason)
   // instead of failing mid-transfer on-chain with a confusing error.
   const treasuryBal = Number((fromAta.amount != null ? fromAta.amount : 0n).toString());
-  if (!(treasuryBal >= amount)) throw new Error("treasury_insufficient");
+  if (!(treasuryBal >= baseUnits)) throw new Error("treasury_insufficient");
   const toAta = await splToken.getOrCreateAssociatedTokenAccount(
     conn, treasuryKp, mintPk, toPk
   );
   const sig = await splToken.transfer(
-    conn, treasuryKp, fromAta.address, toAta.address, treasuryKp.publicKey, amount
+    conn, treasuryKp, fromAta.address, toAta.address, treasuryKp.publicKey, baseUnits
   );
   return sig;
 }
