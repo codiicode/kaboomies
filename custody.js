@@ -121,7 +121,7 @@ function startWatcher(store) {
   if (!enabled()) return; // INERT unless KABOOM_MINT + TREASURY_SECRET + SOLANA_RPC
   const web3 = require("@solana/web3.js");
   const splToken = require("@solana/spl-token");
-  const bs58 = require("bs58");
+  const bs58 = require("bs58").default || require("bs58"); // bs58@6 is ESM -> .decode lives on .default
 
   const conn = new web3.Connection(process.env.SOLANA_RPC, "confirmed");
   const mint = process.env.KABOOM_MINT;
