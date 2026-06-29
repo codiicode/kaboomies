@@ -1340,12 +1340,16 @@ function mountPrivy(){
   if(_privyMethods) return Promise.resolve();
   if(_privyMountPromise) return _privyMountPromise;
   _privyMountPromise=(async()=>{
-  const [{default:React},{createRoot},Privy]=await Promise.all([
+  const [{default:React},{createRoot},Privy,PrivySolana]=await Promise.all([
     import("https://esm.sh/react@18"),
     import("https://esm.sh/react-dom@18/client"),
     import("https://esm.sh/@privy-io/react-auth@1?deps=react@18,react-dom@18"),
+    import("https://esm.sh/@privy-io/react-auth@1/solana?deps=react@18,react-dom@18"),
   ]);
   const {PrivyProvider,usePrivy,useSolanaWallets}=Privy;
+  // The Privy app has Solana login enabled, so the SDK REQUIRES Solana connectors or sign-in
+  // breaks ("no Solana wallet connectors have been passed to Privy"). Pass them here.
+  const toSolanaWalletConnectors = PrivySolana && PrivySolana.toSolanaWalletConnectors;
   // IMPORTANT: do NOT set display:none here. Privy renders its login modal inside this
   // provider subtree, so a hidden host hides the modal too — first-time sign-in then opens
   // nothing (returning users worked only because their session restores without a modal).
@@ -1366,8 +1370,9 @@ function mountPrivy(){
     },[p.authenticated,wallets.length,p.user]);
     return null;
   }
-  createRoot(host).render(React.createElement(PrivyProvider,{appId:PRIVY_APP_ID,
-    config:{embeddedWallets:{createOnLogin:"users-without-wallets"}, loginMethods:["email","google","twitter","discord","apple"]}},
+  const _cfg={embeddedWallets:{createOnLogin:"users-without-wallets"}, loginMethods:["email","google","twitter","discord","apple"]};
+  if(toSolanaWalletConnectors){ try{ _cfg.externalWallets={solana:{connectors:toSolanaWalletConnectors()}}; }catch(e){ console.error("Privy Solana connectors init failed:",e); } }
+  createRoot(host).render(React.createElement(PrivyProvider,{appId:PRIVY_APP_ID,config:_cfg},
     React.createElement(Bridge,null)));
   await new Promise(r=>setTimeout(r,500));
   })().catch(e=>{ _privyMountPromise=null; throw e; });
