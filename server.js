@@ -846,10 +846,34 @@ function botDangerSet(room) {
   for (const b of room.bombs) for (const k of botBlastCells(room, b.col, b.row, b.range)) s.add(k);
   return s;
 }
+// Shortest walkable path (BFS, capped) out of a bomb's blast; returns the FIRST step [c,r] to
+// take toward the nearest safe tile, or null if genuinely boxed in. Lets bots bomb crates in
+// tight corners/corridors and retreat around them instead of freezing (the old 1-tile check
+// refused to bomb whenever the only neighbour sat inside the blast).
+function botSafeStep(room, c, r, blast) {
+  const q = [[c, r, null]]; const seen = new Set([c + "," + r]); let guard = 0;
+  while (q.length && guard++ < 80) {
+    const [cc, rr, first] = q.shift();
+    for (const [dc, dr] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nc = cc + dc, nr = rr + dr, k = nc + "," + nr;
+      if (seen.has(k) || !botWalkable(room, nc, nr)) continue;
+      seen.add(k);
+      const step = first || [nc, nr];
+      if (!blast.has(k)) return step;     // reached a safe tile -> first move toward it
+      if (step) q.push([nc, nr, step]);
+    }
+  }
+  return null;
+}
 function botThink(room, bot) {
   const c = Math.round((bot.x - TILE/2)/TILE), r = Math.round((bot.y - TILE/2)/TILE);
   const cx = c*TILE + TILE/2, cy = r*TILE + TILE/2;
-  const centered = Math.abs(bot.x - cx) < 3 && Math.abs(bot.y - cy) < 3;
+  // The "centered" window MUST be smaller than one move step. With the old fixed 3px and a 2.9px
+  // step, a bot stepped 2.9px off-center, was still "centered" (<3), and got snapped back every
+  // tick — pinned to its spawn forever. 0.6*step always re-centers (closest approach <= step/2)
+  // without ever undoing a move.
+  const step = effSpeed(bot), eps = step * 0.6;
+  const centered = Math.abs(bot.x - cx) < eps && Math.abs(bot.y - cy) < eps;
   const danger = botDangerSet(room);
   const players = [...room.players.values()];
   if (centered) {
@@ -864,10 +888,9 @@ function botThink(room, bot) {
       const canBomb = room.bombs.filter(b=>b.owner===bot.id).length < bot.maxBombs && room.grid[r][c]===0 && !room.bombs.some(b=>b.col===c&&b.row===r);
       if (canBomb && (adjCrate || ed <= bot.range+1) && Math.random() < 0.85) {
         const blast = botBlastCells(room, c, r, bot.range);
-        const esc = [[c+1,r],[c-1,r],[c,r+1],[c,r-1]].find(([nc,nr]) => botWalkable(room,nc,nr) && !blast.has(nc+","+nr));
+        const esc = botSafeStep(room, c, r, blast);   // BFS retreat (bomb-and-run around the corner)
         if (esc) { placeBomb(room, bot); bot.ai.tc=esc[0]; bot.ai.tr=esc[1]; bot.ai.flee=true; }
-        else if (ed <= 1) { placeBomb(room, bot); const any=[[c+1,r],[c-1,r],[c,r+1],[c,r-1]].find(([nc,nr])=>botWalkable(room,nc,nr)); if(any){bot.ai.tc=any[0];bot.ai.tr=any[1];bot.ai.flee=true;}else{bot.ai.tc=c;bot.ai.tr=r;} }
-        else { bot.ai.tc=c; bot.ai.tr=r; }
+        else { bot.ai.tc=c; bot.ai.tr=r; }            // truly boxed in -> hold, don't suicide
       } else {
         let opts = [[c+1,r],[c-1,r],[c,r+1],[c,r-1]].filter(([nc,nr]) => botWalkable(room,nc,nr) && !danger.has(nc+","+nr));
         if (!opts.length) opts = [[c+1,r],[c-1,r],[c,r+1],[c,r-1]].filter(([nc,nr]) => botWalkable(room,nc,nr));

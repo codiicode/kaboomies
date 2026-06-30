@@ -1696,7 +1696,7 @@ function renderArenas(maps){const host=$("arena-list");if(!host)return;host.inne
     card.innerHTML='<div class="an">TRAINING GROUND</div>'+
       '<div class="ad">free-for-all practice</div>'+
       '<div class="stake free">🎮 Free practice · no token cost</div>'+
-      '<div class="ap"><span class="live"></span>'+(tm.players||0)+'<b> / '+(tm.cap||6)+'</b> playing</div>';
+      '<div class="ap"><span class="live"></span>'+Math.max(tm.players||0,3)+'<b> / '+(tm.cap||6)+'</b> playing</div>'; // floor: joining always spawns lively bots, so never read "dead"
     card.onclick=()=>joinMap(tm.id);host.appendChild(card);return;
   }
   host.style.gridTemplateColumns="";host.style.justifyContent=""; // real money: back to the multi-arena stake grid
