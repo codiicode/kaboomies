@@ -1904,9 +1904,10 @@ function connect(){
       if(m.streak&&m.streak.xpAwarded>0)pushFeed("🔥 Day "+m.streak.count+" streak +"+m.streak.xpAwarded+" XP","win");
     } else if(m.t==="blocked"){try{ws.close();}catch(_){}connected=false;
       const n=$("mode-note");
-      if(m.reason==="need_wallet"){if(n)n.textContent="Connect your wallet first to play for real money.";}
-      else{realMoneyEnabled=false;updateModeUI();setMode("play");if(n)n.textContent="Real money launches with deposits soon — playing Training for now.";}
-      showScreen("lobby");
+      if(m.reason==="need_wallet"){if(n)n.textContent="Connect your wallet first to play for real money.";showScreen("lobby");}
+      else if(m.reason==="insufficient"){ // real money is fine — they just have no balance yet. Stay in real mode, send them to deposit.
+        if(n)n.innerHTML="Not enough $KABOOM for this table — deposit first, then jump in.";openWallet();}
+      else{realMoneyEnabled=false;updateModeUI();setMode("play");if(n)n.textContent="Real money launches with deposits soon — playing Training for now.";showScreen("lobby");}
     } else if(m.t==="round"){grid=m.grid;state.win=m.win||"";state.warn=[];suddenOn=false;myPot=0;predBombs=[];predPicked.clear();
       if(typeof m.seed==="number"&&curMap.style!=="garden"){curPalette=paletteFromSeed(m.seed);curTheme=themeFromSeed(m.seed);}snowFlakes=[];updateArenaName();genCosmetics();}
     else if(m.t==="voice-peers"){for(const pid of m.peers)createPeer(pid,true);}
