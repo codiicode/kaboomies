@@ -126,6 +126,18 @@ function _fakeTx({ sig, from, to, mint, amount }) {
   };
 }
 
+// Resolve (and cache) which SPL token program owns the mint: classic SPL Token vs
+// Token-2022. pump.fun mints are Token-2022, whose ATA derives to a DIFFERENT address —
+// using the wrong program makes the watcher poll a nonexistent ATA and miss every deposit.
+let _tokenProgramPk = null;
+async function resolveTokenProgram(conn, splToken, mintPk) {
+  if (_tokenProgramPk) return _tokenProgramPk;
+  let owner = null;
+  try { const info = await conn.getAccountInfo(mintPk); owner = info && info.owner ? info.owner.toBase58() : null; } catch (e) {}
+  _tokenProgramPk = (owner === splToken.TOKEN_2022_PROGRAM_ID.toBase58()) ? splToken.TOKEN_2022_PROGRAM_ID : splToken.TOKEN_PROGRAM_ID;
+  return _tokenProgramPk;
+}
+
 // ---- deposit watcher (gated; never runs or loads @solana in tests / when disabled) ----
 // Polls the treasury ATA for new signatures, fetches each parsed tx, and routes
 // inbound $KABOOM transfers through parseIncoming -> creditDeposit. Real code,
@@ -148,7 +160,8 @@ function startWatcher(store) {
   async function tick() {
     try {
       if (!treasuryAtaPk) {
-        treasuryAtaPk = await splToken.getAssociatedTokenAddress(mintPk, treasuryKp.publicKey);
+        const prog = await resolveTokenProgram(conn, splToken, mintPk);
+        treasuryAtaPk = await splToken.getAssociatedTokenAddress(mintPk, treasuryKp.publicKey, false, prog);
         treasuryAta = treasuryAtaPk.toBase58();
       }
       const sigs = await conn.getSignaturesForAddress(treasuryAtaPk, { limit: 25 });
@@ -253,18 +266,20 @@ async function defaultSendFn({ to, amount }) {
   const toPk = new web3.PublicKey(to);
 
   const baseUnits = amount * UNIT; // `amount` is whole $KABOOM -> convert to on-chain base units
+  const prog = await resolveTokenProgram(conn, splToken, mintPk); // classic vs Token-2022 (pump.fun)
   const fromAta = await splToken.getOrCreateAssociatedTokenAccount(
-    conn, treasuryKp, mintPk, treasuryKp.publicKey
+    conn, treasuryKp, mintPk, treasuryKp.publicKey, false, undefined, undefined, prog
   );
   // Pre-check treasury balance so a shortfall rolls back cleanly (clear reason)
   // instead of failing mid-transfer on-chain with a confusing error.
   const treasuryBal = Number((fromAta.amount != null ? fromAta.amount : 0n).toString());
   if (!(treasuryBal >= baseUnits)) throw new Error("treasury_insufficient");
   const toAta = await splToken.getOrCreateAssociatedTokenAccount(
-    conn, treasuryKp, mintPk, toPk
+    conn, treasuryKp, mintPk, toPk, false, undefined, undefined, prog
   );
-  const sig = await splToken.transfer(
-    conn, treasuryKp, fromAta.address, toAta.address, treasuryKp.publicKey, baseUnits
+  // transferChecked (not transfer) — required/safer for Token-2022, asserts mint + decimals.
+  const sig = await splToken.transferChecked(
+    conn, treasuryKp, fromAta.address, mintPk, toAta.address, treasuryKp.publicKey, baseUnits, KABOOM_DECIMALS, undefined, undefined, prog
   );
   return sig;
 }
