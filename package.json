@@ -19,5 +19,9 @@
     "tweetnacl": "^1.0.3",
     "ws": "^8.21.0"
   },
+  "overrides": {
+    "rpc-websockets": "9.3.4"
+  },
+  "comment_overrides": "rpc-websockets@9.3.9 (pulled by @solana/web3.js@1.98) bumped uuid to v14 (ESM-only), which crashes `require()` on Railway's Node where require(esm) is off. Pin rpc-websockets to 9.3.4 — the newest 9.x still on CJS uuid@8.3.2, with the same v9 API web3.js expects. Verified under `node --no-experimental-require-module` (simulating Railway).",
   "comment_custody": "Real-money custody (custody.js) needs @solana/web3.js + @solana/spl-token. They are intentionally NOT installed by default — custody is gated off and lazy-requires them only when KABOOM_MINT/TREASURY_SECRET/SOLANA_RPC are set. To ACTIVATE custody: run `npm i @solana/web3.js@^1.98.4 @solana/spl-token@^0.4.14`, set the env vars, validate on devnet, then go live."
 }
