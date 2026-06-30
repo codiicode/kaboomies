@@ -75,11 +75,13 @@ test("POST /profile returns a profile for a valid signature, 401 otherwise", asy
   }
 });
 
-test("buildProfile includes 8-character unlock state", () => {
+test("buildProfile includes the 9-character unlock state (hero + earl starters)", () => {
   const p = game.buildProfile("walletChars", "Cee");
-  assert.strictEqual(p.characters.length, 8);
+  assert.strictEqual(p.characters.length, 9);
   assert.strictEqual(p.characters[0].base, "hero");
   assert.strictEqual(p.characters[0].unlocked, true);
+  assert.strictEqual(p.characters[1].base, "earl");
+  assert.strictEqual(p.characters[1].unlocked, true);
 });
 
 test("GET /characters returns the requirement defs (no auth)", async () => {

@@ -737,6 +737,43 @@ function drawHero(cx,cy,S,o){
     ctx.lineWidth=S*0.018;[-1,1].forEach(s=>{ctx.beginPath();ctx.moveTo(s*S*0.04,hcy-S*0.1);ctx.lineTo(s*S*0.17,hcy-S*0.14);ctx.stroke();});ctx.lineCap="butt";
     ctx.restore();return;
   }
+  if(base==="earl"){ // Earl — Kermit-style green frog calmly sipping from a glass (the meme)
+    const skin=o.skin||"#74b53f",skinD=darken(skin,0.24),skinL=lighten(skin,0.14),coll="#fbfbfb",glass="rgba(214,236,255,.5)",milk=o.clothes||"#f3efe2";
+    const hop=o.moving?Math.abs(Math.sin(o.phase))*S*0.05:0,legA=o.moving?Math.sin(o.phase)*S*0.06:0;
+    ctx.save();ctx.translate(cx,cy);ctx.globalAlpha=Math.min(1,sp*1.5);shadowEll(0,S*0.5,S*0.46);ctx.translate(0,-hop);
+    // webbed feet + legs
+    [[-S*0.1,legA],[S*0.1,-legA]].forEach(([lx,d])=>{ctx.fillStyle=skin;ctx.strokeStyle=out;ctx.lineWidth=S*0.045;rr(lx-S*0.05,S*0.2-d,S*0.1,S*0.14,S*0.04);ctx.fill();ctx.stroke();
+      ctx.fillStyle=skinD;ctx.beginPath();ctx.ellipse(lx,S*0.35-d,S*0.08,S*0.034,0,0,7);ctx.fill();ctx.stroke();});
+    // left arm hanging
+    ctx.strokeStyle=skin;ctx.lineWidth=S*0.07;ctx.lineCap="round";ctx.beginPath();ctx.moveTo(-S*0.16,-S*0.02);ctx.lineTo(-S*0.27,S*0.16);ctx.stroke();ctx.lineCap="butt";
+    // body
+    ctx.fillStyle=skin;ctx.strokeStyle=out;ctx.lineWidth=S*0.05;rr(-S*0.19,-S*0.06,S*0.38,S*0.3,S*0.11);ctx.fill();ctx.stroke();
+    ctx.fillStyle=skinL;ctx.beginPath();ctx.ellipse(-S*0.05,S*0.08,S*0.1,S*0.12,0,0,7);ctx.fill();
+    // pointed white collar (Kermit's signature)
+    ctx.fillStyle=coll;ctx.strokeStyle=out;ctx.lineWidth=S*0.02;for(let i=-2;i<=2;i++){const x=i*S*0.078;ctx.beginPath();ctx.moveTo(x-S*0.052,-S*0.055);ctx.lineTo(x+S*0.052,-S*0.055);ctx.lineTo(x,S*0.03);ctx.closePath();ctx.fill();ctx.stroke();}
+    const hcy=-S*0.32,hr=S*0.25;
+    // head
+    ctx.fillStyle=skin;ctx.strokeStyle=out;ctx.lineWidth=S*0.05;ctx.beginPath();ctx.ellipse(0,hcy,hr,hr*0.9,0,0,7);ctx.fill();ctx.stroke();
+    ctx.fillStyle=skinL;ctx.beginPath();ctx.ellipse(-S*0.08,hcy-S*0.02,S*0.06,S*0.08,0,0,7);ctx.fill();
+    // two eye-domes on TOP of the head
+    [-1,1].forEach(s=>{ctx.fillStyle=skin;ctx.strokeStyle=out;ctx.lineWidth=S*0.04;ctx.beginPath();ctx.arc(s*S*0.1,hcy-hr*0.76,S*0.1,0,7);ctx.fill();ctx.stroke();
+      if(bl){ctx.strokeStyle=out;ctx.lineWidth=S*0.026;ctx.lineCap="round";ctx.beginPath();ctx.moveTo(s*S*0.1-S*0.04,hcy-hr*0.76);ctx.lineTo(s*S*0.1+S*0.04,hcy-hr*0.76);ctx.stroke();ctx.lineCap="butt";}
+      else{ctx.fillStyle="#fff";ctx.strokeStyle=out;ctx.lineWidth=S*0.022;ctx.beginPath();ctx.arc(s*S*0.1,hcy-hr*0.76,S*0.058,0,7);ctx.fill();ctx.stroke();
+        ctx.fillStyle="#16161b";ctx.beginPath();ctx.arc(s*S*0.1,hcy-hr*0.77,S*0.026,0,7);ctx.fill();
+        ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(s*S*0.1-S*0.01,hcy-hr*0.79,S*0.01,0,7);ctx.fill();}});
+    // wide, calm, faintly-unbothered mouth
+    ctx.strokeStyle=skinD;ctx.lineWidth=S*0.028;ctx.lineCap="round";ctx.beginPath();ctx.moveTo(-S*0.15,hcy+S*0.1);ctx.quadraticCurveTo(0,hcy+S*0.14,S*0.15,hcy+S*0.1);ctx.stroke();ctx.lineCap="butt";
+    // right arm bent up to the glass
+    ctx.strokeStyle=skin;ctx.lineWidth=S*0.07;ctx.lineCap="round";ctx.beginPath();ctx.moveTo(S*0.16,-S*0.02);ctx.lineTo(S*0.1,hcy+S*0.2);ctx.stroke();ctx.lineCap="butt";
+    // glass of milk raised to the mouth
+    ctx.save();ctx.translate(S*0.03,hcy+S*0.19);ctx.rotate(-0.1);
+      ctx.fillStyle=milk;ctx.strokeStyle=out;ctx.lineWidth=S*0.028;ctx.beginPath();ctx.moveTo(-S*0.07,-S*0.02);ctx.lineTo(S*0.07,-S*0.02);ctx.lineTo(S*0.055,S*0.15);ctx.lineTo(-S*0.055,S*0.15);ctx.closePath();ctx.fill();
+      ctx.fillStyle=glass;ctx.beginPath();ctx.moveTo(-S*0.07,-S*0.02);ctx.lineTo(S*0.07,-S*0.02);ctx.lineTo(S*0.064,S*0.055);ctx.lineTo(-S*0.064,S*0.055);ctx.closePath();ctx.fill();
+      ctx.strokeStyle=out;ctx.lineWidth=S*0.022;ctx.beginPath();ctx.moveTo(-S*0.07,-S*0.02);ctx.lineTo(S*0.07,-S*0.02);ctx.lineTo(S*0.055,S*0.15);ctx.lineTo(-S*0.055,S*0.15);ctx.closePath();ctx.stroke();
+      ctx.fillStyle="rgba(255,255,255,.55)";rr(-S*0.05,S*0.0,S*0.015,S*0.11,S*0.006);ctx.fill();
+    ctx.restore();
+    ctx.restore();return;
+  }
   ctx.save();ctx.translate(cx,cy);ctx.globalAlpha=Math.min(1,sp*1.5);
   shadowEll(0,S*0.5,S*0.46);
   const breathe=o.moving?1:1+Math.sin(performance.now()/650)*0.025;
@@ -1212,7 +1249,7 @@ const PAL={
   hatCol:["#ff5d73","#ffd23d","#54b8ff","#5ed66b","#a06bff","#2a2f45","#ffffff"],
 };
 const HATS=["none","cap","beanie","crown","party"];
-const BASES=[{id:"hero",name:"Hero"},{id:"house",name:"Chillhouse"},{id:"sahur",name:"Tung Sahur"},{id:"bull",name:"Ansem The Black Bull"},{id:"wif",name:"WIF"},{id:"popcat",name:"Popcat"},{id:"alon",name:"ALON"},{id:"mitch",name:"MITCH"}];
+const BASES=[{id:"hero",name:"Hero"},{id:"earl",name:"Earl"},{id:"house",name:"Chillhouse"},{id:"sahur",name:"Tung Sahur"},{id:"bull",name:"Ansem The Black Bull"},{id:"wif",name:"WIF"},{id:"popcat",name:"Popcat"},{id:"alon",name:"ALON"},{id:"mitch",name:"MITCH"}];
 let hoverBase=null, hoverTimer=null; // hover/tap-to-preview a character (incl. locked ones)
 const IMG_BASES=[];
 let playerSkin=Store.get("bb_skin")||{base:"hero",skin:"#e8b07a",clothes:"#7d8aa0",house:"#e7cfa0",roof:"#c0563b",hat:"none",hatCol:"#ff5d73"};
@@ -1462,8 +1499,9 @@ function buildCustomizer(){
   };
   // until unlock data has loaded (charUnlock null) only Hero is owned, so locked
   // skins read as locked immediately instead of flashing as owned then re-locking.
-  const owned=BASES.filter(b=>charUnlock?charUnlock.has(b.id):b.id==="hero");
-  const locked=BASES.filter(b=>charUnlock?!charUnlock.has(b.id):b.id!=="hero");
+  const starter=b=>b.id==="hero"||b.id==="earl"; // always-unlocked starters (also the pre-load fallback)
+  const owned=BASES.filter(b=>charUnlock?charUnlock.has(b.id):starter(b));
+  const locked=BASES.filter(b=>charUnlock?!charUnlock.has(b.id):!starter(b));
   section("Skins you own",owned,false);
   section("Locked skins",locked,true,"Keep playing to unlock more.");
   { const g=document.createElement("div");g.className="opt-group";g.innerHTML='<h4>Shop · coming soon</h4>';
@@ -2299,7 +2337,7 @@ function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
       ctx.globalAlpha=1;
       // nameplate: Lv badge + name + HP bar, lifted clear ABOVE the gubbe (above hair/horns)
       const nm=rp.name||"",lvl=rp.lvl||1;
-      const _ST=TILE*1.12,_TOPS={house:.66,hero:.64,sahur:.64,bull:.84,wif:.68,popcat:.68,alon:.58,mitch:.58};
+      const _ST=TILE*1.12,_TOPS={house:.66,hero:.64,earl:.74,sahur:.64,bull:.84,wif:.68,popcat:.68,alon:.58,mitch:.58};
       const gy=rp.y-(_TOPS[rp.base]||.84)*_ST-24;
       ctx.textBaseline="middle";
       ctx.font="bold 11px 'VT323',monospace";const lvTxt="Lv"+lvl,lvW=ctx.measureText(lvTxt).width+9;
