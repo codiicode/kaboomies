@@ -66,8 +66,12 @@ const balances = new Map(); // (cur|walletKey) -> number (live cache backed by s
 const REAL_MONEY_ENABLED = !!(process.env.KABOOM_MINT && process.env.TREASURY_SECRET && process.env.SOLANA_RPC);
 
 function bal(key, cur) {
-  const ck = (cur === "real" ? "real|" : "play|") + key;
-  if (!balances.has(ck)) balances.set(ck, store.getBalance(key, cur === "real" ? 0 : START_BAL, cur));
+  // Real balances change OUT OF BAND — the deposit watcher credits them and withdrawals debit
+  // them straight in the store — so an in-memory cache goes stale (a fresh deposit wouldn't be
+  // seen by the join gate). Always read real straight from the store, the single source of truth.
+  if (cur === "real") return store.getBalance(key, 0, "real");
+  const ck = "play|" + key;
+  if (!balances.has(ck)) balances.set(ck, store.getBalance(key, START_BAL, "play"));
   return balances.get(ck);
 }
 function setBal(key, v, name, cur) {
