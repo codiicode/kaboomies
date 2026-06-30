@@ -1300,16 +1300,21 @@ function getProvider(){
   return null;
 }
 function setWalletMsg(html){const info=$("wallet-info");if(info)info.innerHTML=html;}
+// Bind an injected wallet (Phantom/Solflare/…) as the active identity + signers. Shared by the
+// explicit Connect flow AND the silent reconnect on reload, so a session survives a refresh.
+function wirePhantom(prov,addr){
+  walletAddr=addr; guestChosen=false; Store.set("bb_wallet",addr);
+  activeSigner=async(m)=>{const r=await prov.p.signMessage(m,"utf8");return r.signature||r;};
+  signTx=async(tx)=>prov.p.signTransaction(tx); // in-app deposits
+  if(prov.p.on && !prov.p._kbWired){prov.p._kbWired=true;prov.p.on("disconnect",()=>{clearIdentity();updateWalletUI();});}
+  updateWalletUI();
+}
 async function connectWallet(){
   if(location.protocol==="file:"){setWalletMsg("⚠ Local preview can't connect a wallet — host over http(s). <b>Guest works here.</b>");return;}
   let prov=getProvider();
   if(!prov){for(let i=0;i<10&&!prov;i++){await new Promise(r=>setTimeout(r,100));prov=getProvider();}} // wallets can inject late
   if(prov){
-    try{const res=await prov.p.connect();walletAddr=(res&&res.publicKey?res.publicKey:prov.p.publicKey).toString();guestChosen=false;Store.set("bb_wallet",walletAddr);
-      activeSigner=async(m)=>{const r=await prov.p.signMessage(m,"utf8");return r.signature||r;};
-      signTx=async(tx)=>prov.p.signTransaction(tx); // for in-app deposits (Phantom signs the transfer)
-      updateWalletUI();
-      if(prov.p.on)prov.p.on("disconnect",()=>{clearIdentity();updateWalletUI();});}
+    try{const res=await prov.p.connect();const pk=(res&&res.publicKey)?res.publicKey:prov.p.publicKey;wirePhantom(prov,pk.toString());}
     catch(e){setWalletMsg("Connection cancelled &middot; <b>play as guest</b> or try again.");}
     return;
   }
@@ -1421,10 +1426,33 @@ function mountPrivy(){
 async function ensureSigner(){
   if(activeSigner) return true;
   if(!walletAddr) return false;
+  // Phantom & co: silent reconnect (no popup when the site is already trusted). Only adopt it if it
+  // returns the SAME wallet we're signed in as — don't hijack a Privy session onto a Phantom account.
+  try{ const prov=getProvider();
+    if(prov&&prov.p&&prov.p.connect&&location.protocol!=="file:"){
+      const res=await prov.p.connect({onlyIfTrusted:true}); const pk=(res&&res.publicKey)?res.publicKey:prov.p.publicKey;
+      if(pk&&pk.toString()===walletAddr){ wirePhantom(prov,pk.toString()); return true; }
+    } }catch(e){}
   if(PRIVY_APP_ID){ try{ await mountPrivy(); }catch(e){} }
   for(let i=0;i<24 && !activeSigner;i++) await new Promise(r=>setTimeout(r,150));
   return !!activeSigner;
 }
+// On page load: a saved wallet means the user stays SIGNED IN until they log out. Show it
+// immediately from the stored address, then silently re-establish the signer (Phantom reconnect /
+// Privy session restore) so signed actions work without a manual re-login.
+async function restoreSession(){
+  if(guestChosen || !walletAddr){ updateWalletUI(); return; }
+  updateWalletUI();
+  if(location.protocol==="file:") return;
+  let prov=getProvider();
+  for(let i=0;i<10 && !prov;i++){ await new Promise(r=>setTimeout(r,100)); prov=getProvider(); } // wallet injects late
+  if(prov&&prov.p&&prov.p.connect){
+    try{ const res=await prov.p.connect({onlyIfTrusted:true}); const pk=(res&&res.publicKey)?res.publicKey:prov.p.publicKey;
+      if(pk&&pk.toString()===walletAddr){ wirePhantom(prov,pk.toString()); return; } }catch(e){}
+  }
+  // Privy (email/social) users: the mountPrivy() preload below restores their session + embedded signer.
+}
+restoreSession();
 // Warm the (heavy, CDN-loaded) Privy SDK in the background so clicking Email/Social opens
 // the modal instantly instead of triggering a multi-second load on the first click.
 // Returning users (have a wallet) preload immediately (also restores their signer);
