@@ -749,8 +749,6 @@ function drawHero(cx,cy,S,o){
     // body
     ctx.fillStyle=skin;ctx.strokeStyle=out;ctx.lineWidth=S*0.05;rr(-S*0.19,-S*0.06,S*0.38,S*0.3,S*0.11);ctx.fill();ctx.stroke();
     ctx.fillStyle=skinL;ctx.beginPath();ctx.ellipse(-S*0.05,S*0.08,S*0.1,S*0.12,0,0,7);ctx.fill();
-    // pointed white collar (Kermit's signature)
-    ctx.fillStyle=coll;ctx.strokeStyle=out;ctx.lineWidth=S*0.02;for(let i=-2;i<=2;i++){const x=i*S*0.078;ctx.beginPath();ctx.moveTo(x-S*0.052,-S*0.055);ctx.lineTo(x+S*0.052,-S*0.055);ctx.lineTo(x,S*0.03);ctx.closePath();ctx.fill();ctx.stroke();}
     const hcy=-S*0.32,hr=S*0.25;
     // head
     ctx.fillStyle=skin;ctx.strokeStyle=out;ctx.lineWidth=S*0.05;ctx.beginPath();ctx.ellipse(0,hcy,hr,hr*0.9,0,0,7);ctx.fill();ctx.stroke();
