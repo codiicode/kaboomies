@@ -71,6 +71,11 @@
   .legal{margin-top:12px;font-family:var(--body);font-size:14px;letter-spacing:.04em;}
   .legal a{color:var(--grey);text-decoration:none;border-bottom:1px dotted var(--grey);}
   .legal a:hover{color:var(--ink);}
+  .ca-row{margin:14px auto 0;max-width:520px;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;
+    background:#fff;border:3px solid var(--ink);box-shadow:3px 3px 0 var(--ink);padding:8px 12px;cursor:pointer;}
+  .ca-row .ca-tag{font-family:var(--display);font-size:10px;color:var(--red);white-space:nowrap;}
+  .ca-row code{font-family:var(--mono,monospace);font-size:13px;color:var(--ink);word-break:break-all;}
+  .ca-row .ca-copy{font-family:var(--display);font-size:10px;color:var(--grey);border:2px solid var(--grey);padding:2px 6px;white-space:nowrap;}
   .arena{position:relative;z-index:4;width:min(560px,98%);height:150px;margin:0 auto 30px;}
   .ground{position:absolute;left:0;right:0;bottom:22px;height:9px;background:var(--ink);}
   .ground::after{content:"";position:absolute;left:0;right:0;top:9px;height:7px;background:repeating-linear-gradient(90deg,var(--ink) 0 10px,transparent 10px 20px);}
@@ -420,7 +425,12 @@
           <details><summary>Do I need a crypto wallet?</summary><p>No — you can play as a guest. Log in with a Solana wallet to save your stats, level and characters, and earn XP from daily quests.</p></details>
         </section>
         <div class="domain">KABOOMIES.FUN</div>
-        <div class="legal"><a href="/terms.html">Terms of Service</a> &middot; <a href="/privacy.html">Privacy Policy</a></div>
+        <div class="ca-row" id="ca-row" title="Click to copy the contract address">
+          <span class="ca-tag">$KABOOM CA</span>
+          <code id="ca-text">8wEqu4Bftd23SBdHtYSpj8AHhLowVWJ6iKMDg7v3pump</code>
+          <span class="ca-copy" id="ca-copy">copy</span>
+        </div>
+        <div class="legal"><a href="https://x.com/kaboomiesfun" target="_blank" rel="noopener">𝕏 @kaboomiesfun</a> &middot; <a href="/terms.html">Terms of Service</a> &middot; <a href="/privacy.html">Privacy Policy</a></div>
       </div>
     </div>
   </section>
@@ -1563,6 +1573,7 @@ $("btn-play").onclick=()=>showScreen("create");
 $("cr-back").onclick=()=>showScreen("start");
 $("guest-btn").onclick=()=>playGuest();
 $("privy-btn").onclick=()=>loginWithPrivy();
+{const car=$("ca-row"),cac=$("ca-copy");if(car)car.onclick=async()=>{try{await navigator.clipboard.writeText("8wEqu4Bftd23SBdHtYSpj8AHhLowVWJ6iKMDg7v3pump");if(cac){cac.textContent="copied ✓";setTimeout(()=>{cac.textContent="copy";},1400);}}catch(e){if(cac)cac.textContent="copy?";}};}
 $("cr-go").onclick=()=>{initAudio();showScreen("lobby");};
 $("lb-back").onclick=()=>showScreen("create");
 function setMode(mode){
