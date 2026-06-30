@@ -139,7 +139,7 @@ function startWatcher(store) {
   const conn = new web3.Connection(process.env.SOLANA_RPC, "confirmed");
   const mint = process.env.KABOOM_MINT;
   const mintPk = new web3.PublicKey(mint);
-  const treasuryKp = web3.Keypair.fromSecretKey(bs58.decode(process.env.TREASURY_SECRET));
+  const treasuryKp = web3.Keypair.fromSecretKey(bs58.decode((process.env.TREASURY_SECRET || "").trim()));
 
   let treasuryAtaPk = null;
   let treasuryAta = null;
@@ -249,7 +249,7 @@ async function defaultSendFn({ to, amount }) {
 
   const conn = new web3.Connection(process.env.SOLANA_RPC, "confirmed");
   const mintPk = new web3.PublicKey(process.env.KABOOM_MINT);
-  const treasuryKp = web3.Keypair.fromSecretKey(bs58.decode(process.env.TREASURY_SECRET));
+  const treasuryKp = web3.Keypair.fromSecretKey(bs58.decode((process.env.TREASURY_SECRET || "").trim()));
   const toPk = new web3.PublicKey(to);
 
   const baseUnits = amount * UNIT; // `amount` is whole $KABOOM -> convert to on-chain base units
@@ -281,7 +281,7 @@ async function buildDepositTx({ fromWallet, amount }) {
   const bs58 = require("bs58").default || require("bs58");
   const conn = new web3.Connection(process.env.SOLANA_RPC, "confirmed");
   const mintPk = new web3.PublicKey(process.env.KABOOM_MINT);
-  const treasuryKp = web3.Keypair.fromSecretKey(bs58.decode(process.env.TREASURY_SECRET));
+  const treasuryKp = web3.Keypair.fromSecretKey(bs58.decode((process.env.TREASURY_SECRET || "").trim()));
   const treasuryPk = treasuryKp.publicKey;
   const fromPk = new web3.PublicKey(fromWallet);
   const baseUnits = amount * UNIT; // whole $KABOOM -> base units

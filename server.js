@@ -1036,10 +1036,17 @@ function startServer(port) {
             // /deposit-info: no auth needed (public treasury + mint), but still gated.
             if (cpath === "/deposit-info") {
               if (!custody.enabled()) return reply(200, { error: "disabled" });
-              const web3 = require("@solana/web3.js");
-              const bs58 = require("bs58").default || require("bs58");
-              const treasuryKp = web3.Keypair.fromSecretKey(bs58.decode(process.env.TREASURY_SECRET));
-              return reply(200, { treasury: treasuryKp.publicKey.toBase58(), mint: process.env.KABOOM_MINT });
+              try {
+                const web3 = require("@solana/web3.js");
+                const bs58 = require("bs58").default || require("bs58");
+                const sk = (process.env.TREASURY_SECRET || "").trim();
+                const treasuryKp = web3.Keypair.fromSecretKey(bs58.decode(sk));
+                return reply(200, { treasury: treasuryKp.publicKey.toBase58(), mint: process.env.KABOOM_MINT });
+              } catch (e) {
+                // surface the precise cause (never the secret itself) so a bad TREASURY_SECRET
+                // — wrong format, quotes, stray chars — is diagnosable without guessing.
+                return reply(200, { error: "treasury_key", reason: String((e && e.message) || e), len: (process.env.TREASURY_SECRET || "").length });
+              }
             }
             // /wallet and /withdraw are auth-verified.
             if (!(m.wallet && m.auth && auth.verify(m.wallet, m.auth.ts, m.auth.sig))) {
