@@ -1012,7 +1012,7 @@ function startServer(port) {
     // they short-circuit to {error:"disabled"} and never touch balances/the chain. ----
     {
       const cpath = (req.url || "").split("?")[0];
-      const CUSTODY_ROUTES = new Set(["/wallet", "/deposit-info", "/withdraw"]);
+      const CUSTODY_ROUTES = new Set(["/wallet", "/deposit-info", "/withdraw", "/deposit-build", "/deposit-submit"]);
       if (req.method === "POST" && CUSTODY_ROUTES.has(cpath)) {
         let body = "", aborted = false;
         req.on("data", (c) => {
@@ -1053,6 +1053,20 @@ function startServer(port) {
             if (cpath === "/withdraw") {
               const out = await handleWithdraw({ wallet: key, amount: m.amount, idemKey: m.idemKey });
               return reply(200, out);
+            }
+            // in-app deposit: server builds the unsigned transfer (user signs client-side),
+            if (cpath === "/deposit-build") {
+              if (!custody.enabled()) return reply(200, { error: "disabled" });
+              const amount = Math.floor(Number(m.amount));
+              if (!(amount > 0)) return reply(400, { error: "invalid_amount" });
+              const tx = await custody.buildDepositTx({ fromWallet: m.wallet, amount });
+              return reply(200, { tx });
+            }
+            // ...then relays the user-signed tx (so the RPC key never reaches the client).
+            if (cpath === "/deposit-submit") {
+              if (!custody.enabled()) return reply(200, { error: "disabled" });
+              const sig = await custody.submitSignedTx(m.tx);
+              return reply(200, { sig });
             }
           } catch (e) {
             return reply(400, { error: "bad_request" });

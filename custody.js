@@ -269,4 +269,44 @@ async function defaultSendFn({ to, amount }) {
   return sig;
 }
 
-module.exports = { enabled, config, creditDeposit, parseIncoming, _fakeTx, startWatcher, withdraw };
+// ---- in-app deposit (build + relay) ----
+// The user can't move SPL tokens from an embedded (Privy) wallet without a UI, so the
+// server BUILDS an unsigned transfer (it has the RPC + mint + treasury address), the client
+// has the user's wallet SIGN it, then the server RELAYS the signed tx (so the RPC key never
+// reaches the client). The server can't move funds: only the user's signature authorizes it.
+async function buildDepositTx({ fromWallet, amount }) {
+  if (!fromWallet || !Number.isInteger(amount) || amount <= 0) throw new Error("invalid");
+  const web3 = require("@solana/web3.js");
+  const splToken = require("@solana/spl-token");
+  const bs58 = require("bs58").default || require("bs58");
+  const conn = new web3.Connection(process.env.SOLANA_RPC, "confirmed");
+  const mintPk = new web3.PublicKey(process.env.KABOOM_MINT);
+  const treasuryKp = web3.Keypair.fromSecretKey(bs58.decode(process.env.TREASURY_SECRET));
+  const treasuryPk = treasuryKp.publicKey;
+  const fromPk = new web3.PublicKey(fromWallet);
+  const baseUnits = amount * UNIT; // whole $KABOOM -> base units
+  const fromAta = await splToken.getAssociatedTokenAddress(mintPk, fromPk);
+  const treasuryAta = await splToken.getAssociatedTokenAddress(mintPk, treasuryPk);
+  const ixs = [
+    // ensure the treasury ATA exists (no-op if it already does); TREASURY pays its rent
+    splToken.createAssociatedTokenAccountIdempotentInstruction(treasuryPk, treasuryAta, treasuryPk, mintPk),
+    splToken.createTransferInstruction(fromAta, treasuryAta, fromPk, baseUnits), // authority = depositing user
+  ];
+  const { blockhash } = await conn.getLatestBlockhash("finalized");
+  // Treasury is the FEE PAYER so the depositing wallet needs NO SOL — critical for fresh Privy
+  // embedded wallets (which start with 0 SOL). Treasury signs the fee slot here; the client adds
+  // the user's transfer-authority signature. Treasury can't move anyone's funds: the transfer's
+  // authority is the user, who must also sign.
+  const tx = new web3.Transaction({ feePayer: treasuryPk, recentBlockhash: blockhash }).add(...ixs);
+  tx.partialSign(treasuryKp);
+  return tx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString("base64");
+}
+async function submitSignedTx(b64) {
+  const web3 = require("@solana/web3.js");
+  const conn = new web3.Connection(process.env.SOLANA_RPC, "confirmed");
+  const raw = Buffer.from(String(b64 || ""), "base64");
+  const sig = await conn.sendRawTransaction(raw, { skipPreflight: false, maxRetries: 3 });
+  return sig; // the deposit watcher credits it once confirmed
+}
+
+module.exports = { enabled, config, creditDeposit, parseIncoming, _fakeTx, startWatcher, withdraw, buildDepositTx, submitSignedTx };

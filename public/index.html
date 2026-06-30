@@ -1247,13 +1247,13 @@ function buildMapPicker(){const host=$("map-picker");if(!host)return;host.innerH
 
 /* ---------- wallet ($KABOOM) ---------- */
 const START_BAL=1000;
-let walletAddr=Store.get("bb_wallet")||null, guestChosen=false, activeSigner=null, myAccountBal=null, accountProfile=Store.get("bb_profile")||null;
+let walletAddr=Store.get("bb_wallet")||null, guestChosen=false, activeSigner=null, signTx=null, myAccountBal=null, accountProfile=Store.get("bb_profile")||null;
 function shortAddr(a){return a?(a.slice(0,4)+"…"+a.slice(-4)):"Guest";}
 // Universal sign-in seam: any login method (wallet, Privy, …) calls this with a
 // Solana public key + a function that signs a Uint8Array message. Server-side
 // auth.verify is untouched — it just checks the ed25519 signature.
 function setIdentity(pubkey,signFn){walletAddr=pubkey;activeSigner=signFn;guestChosen=false;Store.set("bb_wallet",pubkey);updateWalletUI();refreshAccountBalance();}
-function clearIdentity(){walletAddr=null;activeSigner=null;myAccountBal=null;accountProfile=null;Store.set("bb_wallet",null);Store.set("bb_profile",null);}
+function clearIdentity(){walletAddr=null;activeSigner=null;signTx=null;myAccountBal=null;accountProfile=null;Store.set("bb_wallet",null);Store.set("bb_profile",null);}
 window.KABOOM_setIdentity=setIdentity;window.KABOOM_logout=()=>{clearIdentity();updateWalletUI();};
 function isMobileDev(){return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);}
 function getProvider(){
@@ -1272,6 +1272,7 @@ async function connectWallet(){
   if(prov){
     try{const res=await prov.p.connect();walletAddr=(res&&res.publicKey?res.publicKey:prov.p.publicKey).toString();guestChosen=false;Store.set("bb_wallet",walletAddr);
       activeSigner=async(m)=>{const r=await prov.p.signMessage(m,"utf8");return r.signature||r;};
+      signTx=async(tx)=>prov.p.signTransaction(tx); // for in-app deposits (Phantom signs the transfer)
       updateWalletUI();
       if(prov.p.on)prov.p.on("disconnect",()=>{clearIdentity();updateWalletUI();});}
     catch(e){setWalletMsg("Connection cancelled &middot; <b>play as guest</b> or try again.");}
@@ -1360,7 +1361,8 @@ function mountPrivy(){
     React.useEffect(()=>{_privyMethods={login:p.login,logout:p.logout,authenticated:!!p.authenticated,hasWallet:!!wallets[0]};
       if(p.authenticated&&p.user){const d=privyDisplay(p.user);if(d){accountProfile=d;try{Store.set("bb_profile",d);}catch(e){}if(walletAddr)updateWalletUI();}}
       if(p.authenticated&&wallets[0]){const w=wallets[0];
-        setIdentity(w.address,async(m)=>{const r=await w.signMessage(m);return r&&r.signature?r.signature:r;});}
+        setIdentity(w.address,async(m)=>{const r=await w.signMessage(m);return r&&r.signature?r.signature:r;});
+        signTx=async(tx)=>w.signTransaction(tx);} // for in-app deposits (Privy embedded wallet signs the transfer)
       else if(p.authenticated&&!wallets[0]&&sw&&sw.createWallet&&!_privyCreating){
         // signed in (e.g. via X/email) but no Solana wallet yet -> provision an embedded one,
         // then the wallets[] change re-runs this effect and setIdentity logs the game in.
@@ -1766,13 +1768,44 @@ async function openWallet(){
 }
 function renderDeposit(dep){
   const addr=dep&&dep.treasury?dep.treasury:"";
-  const me=walletAddr||"";
   $("deposit-block").innerHTML=
-    '<div class="waddr"><code id="dep-addr">'+esc(addr)+'</code><button class="wcopy" id="dep-copy">COPY</button></div>'+
-    '<div class="wmsg">Send <b>$KABOOM</b> to this address — it credits your balance <b>automatically</b>.</div>'+
-    '<div class="wwarn">Send <b>ONLY</b> from your connected wallet — <b>never from an exchange</b> (Coinbase, Binance, etc.) or your deposit will be <b>lost</b>. Deposits are credited to your logged-in wallet:'+
-    '<code class="wwarn-addr">'+esc(me)+'</code></div>';
+    '<div class="wmsg">Deposit $KABOOM straight from your wallet — no SOL needed, credits in seconds.</div>'+
+    '<div class="wrow"><input class="wamount" id="dep-amount" type="number" min="1" step="1" placeholder="Amount of $KABOOM"><button class="wsubmit" id="dep-go">DEPOSIT</button></div>'+
+    '<div class="wresult" id="dep-result"></div>'+
+    '<details class="wmanual"><summary>or send manually</summary>'+
+      '<div class="waddr"><code id="dep-addr">'+esc(addr)+'</code><button class="wcopy" id="dep-copy">COPY</button></div>'+
+      '<div class="wwarn">Send <b>ONLY</b> from your connected wallet — <b>never from an exchange</b> — or your deposit is <b>lost</b>.</div>'+
+    '</details>';
   const cp=$("dep-copy");if(cp)cp.onclick=async()=>{try{await navigator.clipboard.writeText(addr);cp.textContent="COPIED ✓";setTimeout(()=>{cp.textContent="COPY";},1400);}catch(e){cp.textContent="COPY?";}};
+  const go=$("dep-go"),amt=$("dep-amount"),out=$("dep-result");
+  if(go)go.onclick=()=>depositInApp(Math.floor(+amt.value),out,go);
+}
+let _web3mod=null;
+async function loadWeb3(){ if(_web3mod)return _web3mod; _web3mod=await import("https://esm.sh/@solana/web3.js@1.98.0"); return _web3mod; }
+// In-app deposit: server builds the transfer (treasury = fee payer), the wallet signs it, server relays it.
+async function depositInApp(amount,out,btn){
+  out.className="wresult";
+  if(!(amount>0)){out.textContent="Enter an amount.";out.classList.add("err");return;}
+  if(!walletAddr||!signTx){out.textContent="Connect a wallet first.";out.classList.add("err");return;}
+  btn.disabled=true; out.textContent="Preparing…";
+  try{
+    if(walletAddr)await ensureSigner();
+    const auth=await signLogin();
+    if(!auth){out.textContent="Reconnect your wallet and try again.";out.classList.add("err");btn.disabled=false;return;}
+    const r=await fetch("/deposit-build",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({wallet:walletAddr,auth,amount})});
+    const j=await r.json(); if(!r.ok||j.error||!j.tx){out.textContent="Couldn’t prepare deposit"+(j&&j.error?(" ("+j.error+")"):"")+".";out.classList.add("err");btn.disabled=false;return;}
+    const web3=await loadWeb3();
+    const tx=web3.Transaction.from(Uint8Array.from(atob(j.tx),c=>c.charCodeAt(0)));
+    out.textContent="Approve in your wallet…";
+    const signed=await signTx(tx);
+    const signedB64=btoa(String.fromCharCode.apply(null,signed.serialize()));
+    out.textContent="Sending…";
+    const r2=await fetch("/deposit-submit",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({wallet:walletAddr,auth,tx:signedB64})});
+    const j2=await r2.json(); if(!r2.ok||j2.error||!j2.sig){out.textContent="Send failed"+(j2&&j2.error?(" ("+j2.error+")"):"")+".";out.classList.add("err");btn.disabled=false;return;}
+    out.classList.remove("err"); out.textContent="Deposit sent ✓ — crediting your balance…";
+    for(let i=0;i<10;i++){ await new Promise(s=>setTimeout(s,2500)); await refreshAccountBalance(); }
+  }catch(e){ out.textContent="Deposit error — "+((e&&e.message)||"try again")+"."; out.classList.add("err"); }
+  btn.disabled=false;
 }
 function renderWithdraw(){
   $("withdraw-block").innerHTML=
