@@ -865,6 +865,14 @@ function botSafeStep(room, c, r, blast) {
   }
   return null;
 }
+// blast set widened by one orthogonal ring — a "keep-out" zone so a fleeing bot stops a full
+// tile clear of the blast instead of hugging its edge (where it can get clipped mid-step).
+function expandDanger(set) {
+  const d = new Set(set);
+  for (const k of set) { const i = k.indexOf(","), bc = +k.slice(0, i), br = +k.slice(i + 1);
+    d.add((bc+1)+","+br); d.add((bc-1)+","+br); d.add(bc+","+(br+1)); d.add(bc+","+(br-1)); }
+  return d;
+}
 function botThink(room, bot) {
   const c = Math.round((bot.x - TILE/2)/TILE), r = Math.round((bot.y - TILE/2)/TILE);
   const cx = c*TILE + TILE/2, cy = r*TILE + TILE/2;
@@ -883,22 +891,34 @@ function botThink(room, bot) {
       bot.ai.tc = safe.length ? safe[0][0] : c; bot.ai.tr = safe.length ? safe[0][1] : r; bot.ai.flee = true;
     } else {
       bot.ai.flee = false;
-      const adjCrate = [[c+1,r],[c-1,r],[c,r+1],[c,r-1]].some(([nc,nr]) => nr>=0&&nc>=0&&nr<room.rows&&nc<room.cols&&room.grid[nr][nc]===2);
-      let ed = 99; for (const q of players){ if (q===bot||!q.alive) continue; const qc=Math.round((q.x-TILE/2)/TILE),qr=Math.round((q.y-TILE/2)/TILE); ed=Math.min(ed,Math.abs(qc-c)+Math.abs(qr-r)); }
-      const canBomb = room.bombs.filter(b=>b.owner===bot.id).length < bot.maxBombs && room.grid[r][c]===0 && !room.bombs.some(b=>b.col===c&&b.row===r);
-      if (canBomb && (adjCrate || ed <= bot.range+1) && Math.random() < 0.85) {
-        const blast = botBlastCells(room, c, r, bot.range);
-        const esc = botSafeStep(room, c, r, blast);   // BFS retreat (bomb-and-run around the corner)
-        if (esc) { placeBomb(room, bot); bot.ai.tc=esc[0]; bot.ai.tr=esc[1]; bot.ai.flee=true; }
-        else { bot.ai.tc=c; bot.ai.tr=r; }            // truly boxed in -> hold, don't suicide
+      const myBomb = room.bombs.some(b => b.owner === bot.id);
+      if (myBomb) {
+        // Own bomb is ticking. Survival comes first: get to a tile a FULL ring clear of every
+        // blast and hold there. Never chase while a bomb is live (that's what got bots clipped).
+        const keepOut = expandDanger(danger);
+        if (keepOut.has(c + "," + r)) {
+          const out = botSafeStep(room, c, r, keepOut);
+          if (out) { bot.ai.tc = out[0]; bot.ai.tr = out[1]; bot.ai.flee = true; }
+          else { bot.ai.tc = c; bot.ai.tr = r; }      // boxed but clear of the actual blast -> hold
+        } else { bot.ai.tc = c; bot.ai.tr = r; }       // already a full tile clear -> hold and wait it out
       } else {
-        let opts = [[c+1,r],[c-1,r],[c,r+1],[c,r-1]].filter(([nc,nr]) => botWalkable(room,nc,nr) && !danger.has(nc+","+nr));
-        if (!opts.length) opts = [[c+1,r],[c-1,r],[c,r+1],[c,r-1]].filter(([nc,nr]) => botWalkable(room,nc,nr));
-        if (opts.length) {
-          let tgt=null,best=1e9; for (const q of players){ if(q===bot||!q.alive)continue; const qc=Math.round((q.x-TILE/2)/TILE),qr=Math.round((q.y-TILE/2)/TILE); const d=Math.abs(qc-c)+Math.abs(qr-r); if(d<best){best=d;tgt=[qc,qr];} }
-          if (tgt && Math.random() < 0.8) { opts.sort((a,b)=>(Math.abs(a[0]-tgt[0])+Math.abs(a[1]-tgt[1]))-(Math.abs(b[0]-tgt[0])+Math.abs(b[1]-tgt[1]))); bot.ai.tc=opts[0][0]; bot.ai.tr=opts[0][1]; }
-          else { const pick=opts[Math.floor(Math.random()*opts.length)]; bot.ai.tc=pick[0]; bot.ai.tr=pick[1]; }
-        } else { bot.ai.tc=c; bot.ai.tr=r; }
+        const adjCrate = [[c+1,r],[c-1,r],[c,r+1],[c,r-1]].some(([nc,nr]) => nr>=0&&nc>=0&&nr<room.rows&&nc<room.cols&&room.grid[nr][nc]===2);
+        let ed = 99; for (const q of players){ if (q===bot||!q.alive) continue; const qc=Math.round((q.x-TILE/2)/TILE),qr=Math.round((q.y-TILE/2)/TILE); ed=Math.min(ed,Math.abs(qc-c)+Math.abs(qr-r)); }
+        const canBomb = room.grid[r][c]===0 && !room.bombs.some(b=>b.col===c&&b.row===r);
+        // Only bomb if we can then reach a tile a FULL ring clear of the new blast (a real refuge),
+        // not just barely outside it — otherwise the bot gets clipped retreating in tight pockets.
+        const esc = canBomb ? botSafeStep(room, c, r, expandDanger(botBlastCells(room, c, r, bot.range))) : null;
+        if (canBomb && esc && (adjCrate || ed <= bot.range+1) && Math.random() < 0.7) {
+          placeBomb(room, bot); bot.ai.tc=esc[0]; bot.ai.tr=esc[1]; bot.ai.flee=true;
+        } else {
+          let opts = [[c+1,r],[c-1,r],[c,r+1],[c,r-1]].filter(([nc,nr]) => botWalkable(room,nc,nr) && !danger.has(nc+","+nr));
+          if (!opts.length && danger.has(c+","+r)) opts = [[c+1,r],[c-1,r],[c,r+1],[c,r-1]].filter(([nc,nr]) => botWalkable(room,nc,nr));
+          if (opts.length) {
+            let tgt=null,best=1e9; for (const q of players){ if(q===bot||!q.alive)continue; const qc=Math.round((q.x-TILE/2)/TILE),qr=Math.round((q.y-TILE/2)/TILE); const d=Math.abs(qc-c)+Math.abs(qr-r); if(d<best){best=d;tgt=[qc,qr];} }
+            if (tgt && Math.random() < 0.8) { opts.sort((a,b)=>(Math.abs(a[0]-tgt[0])+Math.abs(a[1]-tgt[1]))-(Math.abs(b[0]-tgt[0])+Math.abs(b[1]-tgt[1]))); bot.ai.tc=opts[0][0]; bot.ai.tr=opts[0][1]; }
+            else { const pick=opts[Math.floor(Math.random()*opts.length)]; bot.ai.tc=pick[0]; bot.ai.tr=pick[1]; }
+          } else { bot.ai.tc=c; bot.ai.tr=r; }
+        }
       }
     }
   }
