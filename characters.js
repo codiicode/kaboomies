@@ -29,7 +29,7 @@ function isUnlocked(base, s) {
 // s = {games,kills,wins,crates,pickups,level}; returns the full roster (starters first).
 function unlockState(s) {
   const hero = { base: "hero", name: "Hero", label: "Starter", stat: null, target: 0, prog: 0, unlocked: true };
-  const earl = { base: "earl", name: "Earl", label: "Starter", stat: null, target: 0, prog: 0, unlocked: true };
+  const earl = { base: "earl", name: "Early", label: "Starter", stat: null, target: 0, prog: 0, unlocked: true };
   const rest = CHARACTER_REQS.map(r => {
     const prog = statValue(s, r.stat);
     return { base: r.base, name: r.name, label: r.label, stat: r.stat, target: r.target, prog, unlocked: prog >= r.target };
