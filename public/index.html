@@ -1260,7 +1260,7 @@ let charUnlock=null;      // Set of unlocked base ids for the current player
 let charProg={};          // base -> {prog,target,label}
 async function loadCharacters(){
   if(!charReqs){ try{ const r=await fetch("/characters"); const j=await r.json(); charReqs=j.reqs||[]; }catch(e){ charReqs=[]; } }
-  charUnlock=new Set(["hero"]); charProg={};
+  charUnlock=new Set(["hero","earl"]); charProg={}; // hero + earl are always-unlocked starters
   if(walletAddr) await ensureSigner();
   const auth = walletAddr ? await signLogin() : null;
   if(auth&&walletAddr){
