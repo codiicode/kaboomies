@@ -2300,6 +2300,7 @@ function juiceTick(dt){
   flashAmt*=Math.pow(0.82,dt/16.67);if(flashAmt<0.01)flashAmt=0;
 }
 function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
+  try{
   if(currentScreen==="start"){stepFX(dt);drawCoverRoster(dt);}
   else if(currentScreen==="create"){pvT-=dt/1000;if(pvT<=0){pvBlink=0.16;pvT=1.6+Math.random()*3;}if(pvBlink>0)pvBlink-=dt/1000;pvPhase+=dt*0.004;renderPreview();}
   else if(currentScreen==="game"&&connected&&grid){
@@ -2376,6 +2377,7 @@ function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
         if(spd>0)h+='<span>👟 <b>'+spd+'</b></span>';           // speed boosts
         ab.innerHTML=h;}else ab.innerHTML="";}
   }
+  }catch(e){ if(!window._frameErrLogged){window._frameErrLogged=1;console.error("frame loop error — recovered (screen no longer freezes); root cause:",e);} }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
