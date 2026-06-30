@@ -754,12 +754,16 @@ function endGame(room) {
 function maybeEndRound(room) {
   if (room.phase !== "playing") return;
   const list = [...room.players.values()];
-  if (list.length < 2) return;
   const alive = list.filter(p => p.alive);
-  if (alive.length <= 1) {
+  // SAFETY NET: once sudden-death has fully closed the arena, the round MUST resolve — never
+  // stall forever (e.g. survivors wedged into the last tiles). A storm-locked tie counts a draw.
+  const stormDone = room.sudden && room.closeOrder && room.closeIdx >= room.closeOrder.length && room.pendingWalls.length === 0;
+  if (list.length < 2 && !stormDone) return;       // lone body: don't end (solo practice) unless the storm fully ran
+  if (alive.length > 1 && !stormDone) return;       // still a contest
+  {
     room.phase = "roundover";
     if (isRanked(room)) for (const pp of room.players.values()) { store.bumpStat(pp.key, "games"); bumpQuest(room, pp, "games"); }
-    const w = alive[0];
+    const w = alive.length === 1 ? alive[0] : null; // lone survivor wins; 0 alive or a storm-locked many-way = draw
     if (w) {
       room.winner = w.name;
       let payout = 0;
